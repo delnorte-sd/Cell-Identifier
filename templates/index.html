@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔬 Cell Image Analysis - AI Microscope Assistant</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #333;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .tab-button {
+            background: transparent;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tab-button.active {
+            background: #333;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .control-panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 20px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #333;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 160px;
+            justify-content: center;
+        }
+
+        /* .btn:hover {
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        } */
+
+        .btn:active {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn.success {
+            background: #333;
+        }
+
+        .btn.danger {
+            background: #666;
+        }
+
+        .file-upload {
+            border: 3px dashed #ccc;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #fafafa;
+        }
+
+        /* .file-upload:hover {
+            border-color: #333;
+            background: #f0f0f0;
+        } */
+
+        .file-upload.dragover {
+            border-color: #333;
+            background: #f5f5f5;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .result-card h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .result-image {
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            background: #333;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #333;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #333;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            background: #666;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .cell-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell-data-table th {
+            background: #333;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .cell-data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        /* .cell-data-table tbody tr:hover {
+            background: #f8f9fa;
+        } */
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .control-group {
+                flex-direction: column;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-direction: column;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-microscope"></i> Cell Image Analysis</h1>
+            <p>By iGEM Team <b>DelNorte-SD</b></p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="synthetic">
+                <i class="fas fa-magic"></i> Generate Synthetic Cells
+            </button>
+            <button class="tab-button" data-tab="analyze">
+                <i class="fas fa-search"></i> Analyze Real Images
+            </button>
+        </div>
+
+        <!-- Synthetic Image Generation Tab -->
+        <div id="synthetic" class="tab-content active">
+            <div class="control-panel">
+                <h3><i class="fas fa-magic"></i> Synthetic Cell Generator</h3>
+                <br>
+                <div class="control-group">
+                    <div class="form-group">
+                        <label for="numCells">Number of Cells:</label>
+                        <input type="number" id="numCells" min="1" max="50" value="15">
+                    </div>
+                    <div class="form-group">
+                        <label for="noiseLevel">Background Noise Level:</label>
+                        <select id="noiseLevel">
+                            <option value="0.05">Low (Clean)</option>
+                            <option value="0.1" selected>Medium (Realistic)</option>
+                            <option value="0.2">High (Noisy)</option>
+                        </select>
+                    </div>
+                    <button class="btn success" onclick="generateSynthetic()">
+                        <i class="fas fa-magic"></i> Generate Image
+                    </button>
+                </div>
+            </div>
+            <div id="syntheticResults" class="results-grid"></div>
+        </div>
+
+        <!-- Image Analysis Tab -->
+        <div id="analyze" class="tab-content">
+            <div class="control-panel">
+                <h3><i class="fas fa-upload"></i> Upload Your Cell Image</h3>
+                <br>
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
+                    <h4>Click to upload or drag & drop your image here</h4>
+                    <p>Supports JPG, PNG, TIFF formats</p>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;"
+                        onchange="handleFileSelect(this)">
+                </div>
+            </div>
+            <div id="analysisResults" class="results-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTab = button.dataset.tab;
+
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                // Add active class to clicked tab and corresponding content
+                button.classList.add('active');
+                document.getElementById(targetTab).classList.add('active');
+            });
+        });
+
+        // File upload handling
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                analyzeImage(input.files[0]);
+            }
+        }
+
+        // Drag and drop functionality
+        const fileUpload = document.querySelector('.file-upload');
+
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                analyzeImage(files[0]);
+            }
+        });
+
+        // Generate synthetic cell images
+        async function generateSynthetic() {
+            const numCells = document.getElementById('numCells').value;
+            const noiseLevel = document.getElementById('noiseLevel').value;
+            const resultsDiv = document.getElementById('syntheticResults');
+
+            // Show loading
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>Generating synthetic cells...</span>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/generate_synthetic', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        num_cells: parseInt(numCells),
+                        noise_level: parseFloat(noiseLevel)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displaySyntheticResults(data);
+                } else {
+                    showError(data.error, 'syntheticResults');
+                }
+            } catch (error) {
+                showError('Failed to generate synthetic image: ' + error.message, 'syntheticResults');
+            }
+        }
+
+        // Display synthetic generation results
+        function displaySyntheticResults(data) {
+            const resultsDiv = document.getElementById('syntheticResults');
+
+            const cellDataRows = data.cell_data.map((cell, index) => `
+                <tr>
+                    <td>Cell ${index + 1}</td>
+                    <td>(${cell.center[0]}, ${cell.center[1]})</td>
+                    <td>${cell.radius}px</td>
+                    <td>${(cell.intensity * 100).toFixed(1)}%</td>
+                    <td>${cell.area}px²</td>
+                </tr>
+            `).join('');
+
+            resultsDiv.innerHTML = `
+                <div class="result-card">
+                    <h3><i class="fas fa-magic"></i> Generated Synthetic Image</h3>
+                    <img src="${data.image}" alt="Synthetic Cell Image" class="result-image">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.cell_count}</div>
+                            <div class="stat-label">Cells Generated</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${(data.cell_data.reduce((sum, cell) => sum + cell.intensity, 0) / data.cell_count * 100).toFixed(1)}%</div>
+                            <div class="stat-label">Avg Intensity</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${Math.round(data.cell_data.reduce((sum, cell) => sum + cell.area, 0) / data.cell_count)}</div>
+                            <div class="stat-label">Avg Area (px²)</div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Generated Cell Data</h4>
+                    <table class="cell-data-table">
+                        <thead>
+                            <tr>
+                                <th>Cell ID</th>
+                                <th>Center (x,y)</th>
+                                <th>Radius</th>
+                                <th>Intensity</th>
+                                <th>Area</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${cellDataRows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // Analyze uploaded image
+        async function analyzeImage(file) {
+            const resultsDiv = document.getElementById('analysisResults');
+
+            // Show loading
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>Analyzing your image...</span>
+                </div>
+            `;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/analyze_image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayAnalysisResults(data);
+                } else {
+                    showError(data.error, 'analysisResults');
+                }
+            } catch (error) {
+                showError('Failed to analyze image: ' + error.message, 'analysisResults');
+            }
+        }
+
+        // Display image analysis results
+        function displayAnalysisResults(data) {
+            const resultsDiv = document.getElementById('analysisResults');
+
+            const cellDataRows = data.cell_data.map((cell, index) => `
+                <tr>
+                    <td>Cell ${index + 1}</td>
+                    <td>(${cell.center[0]}, ${cell.center[1]})</td>
+                    <td>${cell.area}</td>
+                    <td>${cell.mean_intensity.toFixed(1)}</td>
+                </tr>
+            `).join('');
+
+            resultsDiv.innerHTML = `
+                <div class="result-card">
+                    <h3><i class="fas fa-search"></i> Analysis Results</h3>
+                    <img src="${data.result_image}" alt="Analysis Results" class="result-image">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.cell_count}</div>
+                            <div class="stat-label">Cells Detected</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${data.average_intensity.toFixed(1)}</div>
+                            <div class="stat-label">Avg Intensity</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">±${data.intensity_std.toFixed(1)}</div>
+                            <div class="stat-label">Intensity Std Dev</div>
+                        </div>
+                    </div>
+                    
+                    ${data.cell_data.length > 0 ? `
+                        <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Detected Cell Data</h4>
+                        <table class="cell-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Cell ID</th>
+                                    <th>Center (x,y)</th>
+                                    <th>Area (px²)</th>
+                                    <th>Mean Intensity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${cellDataRows}
+                            </tbody>
+                        </table>
+                    ` : '<p style="text-align: center; margin-top: 20px; color: #666;">No cells detected in this image.</p>'}
+                </div>
+            `;
+        }
+
+        // Show error message
+        function showError(message, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('Cell Image Analysis Tool Loaded Successfully!');
+        });
+    </script>
+</body>
+
+</html>
