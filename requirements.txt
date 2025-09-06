@@ -3,7 +3,7 @@ Flask==3.0.0
 
 # Computer vision and image processing
 opencv-python==4.8.1.78
-Pillow==10.1.0
+Pillow==11.0.0
 
 # Scientific computing and array operations (Python 3.12 compatible versions)
 numpy==1.26.2
