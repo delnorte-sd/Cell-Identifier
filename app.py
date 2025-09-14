@@ -155,7 +155,7 @@ class SimpleCellAnalyzer:
                 mean_intensity = cv2.mean(img, mask=mask)[0]
 
                 # Classify brightness
-                if mean_intensity < 85:
+                if mean_intensity < 100:
                     brightness = "Low"
                 elif mean_intensity < 170:
                     brightness = "Medium"
