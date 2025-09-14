@@ -102,7 +102,7 @@ class SimpleCellAnalyzer:
     """Simplified cell detection and analysis using traditional computer vision"""
     
     def __init__(self):
-        self.min_cell_area = 200
+        self.min_cell_area = 100
         self.max_cell_area = 3000
         
     def analyze_image(self, image_path):
@@ -153,11 +153,20 @@ class SimpleCellAnalyzer:
                 
                 # Calculate mean intensity
                 mean_intensity = cv2.mean(img, mask=mask)[0]
-                
+
+                # Classify brightness
+                if mean_intensity < 85:
+                    brightness = "Low"
+                elif mean_intensity < 170:
+                    brightness = "Medium"
+                else:
+                    brightness = "High"
+
                 cell_data.append({
                     'center': (cx, cy),
                     'area': area,
                     'mean_intensity': mean_intensity,
+                    'brightness': brightness,
                     'contour': contour.tolist()
                 })
         
@@ -181,8 +190,11 @@ class SimpleCellAnalyzer:
             
             # Add label with cell number and intensity
             label = f"Cell {i+1}: {cell_info['mean_intensity']:.1f}"
+            # Add label with cell number, intensity, and brightness
+            label = f"Cell {i+1}: {cell_info['mean_intensity']:.1f} ({cell_info['brightness']})"
             cv2.putText(result_img, label, (center[0] - 40, center[1] - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
         
         return result_img
 

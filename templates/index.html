@@ -162,6 +162,7 @@
                     <td>${cell.radius}px</td>
                     <td>${(cell.intensity * 100).toFixed(1)}%</td>
                     <td>${cell.area}px²</td>
+                    <td>${cell.brightness || '-'}</td>
                 </tr>
             `).join('');
 
@@ -193,6 +194,7 @@
                                 <th>Radius</th>
                                 <th>Intensity</th>
                                 <th>Area</th>
+                                <th>Brightness</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -246,6 +248,7 @@
                     <td>(${cell.center[0]}, ${cell.center[1]})</td>
                     <td>${cell.area}</td>
                     <td>${cell.mean_intensity.toFixed(1)}</td>
+                    <td>${cell.brightness}</td>
                 </tr>
             `).join('');
 
@@ -277,6 +280,7 @@
                                     <th>Center (x,y)</th>
                                     <th>Area (px²)</th>
                                     <th>Mean Intensity</th>
+                                    <th>Brightness</th>
                                 </tr>
                             </thead>
                             <tbody>
