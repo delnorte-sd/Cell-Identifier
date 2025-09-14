@@ -102,8 +102,8 @@ class SimpleCellAnalyzer:
     """Simplified cell detection and analysis using traditional computer vision"""
     
     def __init__(self):
-        self.min_cell_area = 100
-        self.max_cell_area = 3000
+        self.min_cell_area = 10
+        self.max_cell_area = 30000
         
     def analyze_image(self, image_path):
         """Analyze cell image and return detection results"""
