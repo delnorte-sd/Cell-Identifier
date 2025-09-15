@@ -1,5 +1,6 @@
 # Core web framework
 Flask==3.0.0
+gunicorn==21.2.0
 
 # Computer vision and image processing
 opencv-python==4.8.1.78
