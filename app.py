@@ -211,9 +211,14 @@ def generate_synthetic():
     """Generate synthetic cell images"""
     try:
         data = request.get_json()
-        num_cells = data.get('num_cells', random.randint(5, 25))
-        noise_level = data.get('noise_level', 0.1)
-        
+        num_cells = data.get('num_cells')
+        if num_cells is None:
+            num_cells = random.randint(5, 25)
+        else:
+            num_cells = int(num_cells)
+
+        noise_level = float(data.get('noise_level', 0.1))
+                
         # Generate synthetic image
         synthetic_img, cell_data = cell_generator.generate_cell_image(
             num_cells=num_cells,
@@ -251,33 +256,30 @@ def generate_synthetic():
 def analyze_image():
     """Analyze uploaded cell image"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file uploaded'})
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'})
-        
-        # Save uploaded file
-        filename = f"{uuid.uuid4().hex}_{file.filename}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
+        # Check for sample image request
+        if request.is_json and request.get_json().get('sample'):
+            sample_path = os.path.join(os.path.dirname(__file__), 'static/sample.jpeg')
+            if not os.path.exists(sample_path):
+                return jsonify({'success': False, 'error': 'sample.jpeg not found'})
+            filepath = sample_path
+        else:
+            if 'file' not in request.files:
+                return jsonify({'success': False, 'error': 'No file uploaded'})
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'success': False, 'error': 'No file selected'})
+            filename = f"{uuid.uuid4().hex}_{file.filename}"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+
         # Analyze image
         contours, cell_data = cell_analyzer.analyze_image(filepath)
-        
         if contours is None:
             return jsonify({'success': False, 'error': 'Could not process image'})
-        
-        # Create result visualization
         original_img = cv2.imread(filepath)
         result_img = cell_analyzer.create_result_image(original_img, contours, cell_data)
-        
-        # Convert result to base64
         _, buffer = cv2.imencode('.png', result_img)
         img_str = base64.b64encode(buffer).decode()
-        
-        # Calculate statistics
         if cell_data:
             intensities = [cell['mean_intensity'] for cell in cell_data]
             avg_intensity = np.mean(intensities)
@@ -285,10 +287,11 @@ def analyze_image():
         else:
             avg_intensity = 0
             std_intensity = 0
-        
-        # Clean up uploaded file
-        os.remove(filepath)
-        
+
+        # Clean up uploaded file if not sample
+        if not (request.is_json and request.get_json().get('sample')):
+            os.remove(filepath)
+
         return jsonify({
             'success': True,
             'result_image': f"data:image/png;base64,{img_str}",
@@ -297,7 +300,6 @@ def analyze_image():
             'intensity_std': float(std_intensity),
             'cell_data': cell_data
         })
-        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

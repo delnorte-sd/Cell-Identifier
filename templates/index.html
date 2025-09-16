@@ -64,6 +64,10 @@
                     <input type="file" id="fileInput" accept="image/*" style="display: none;"
                         onchange="handleFileSelect(this)">
                 </div>
+                <br>
+                <button class="btn info" onclick="analyzeSampleImage()" style="margin-bottom: 15px;">
+                    <i class="fas fa-image"></i> Use Sample Image (E. coli with GFP)
+                </button>
             </div>
             <div id="analysisResults" class="results-grid"></div>
         </div>
@@ -163,7 +167,6 @@
                     <td>${cell.radius}px</td>
                     <td>${(cell.intensity * 100).toFixed(1)}%</td>
                     <td>${cell.area}px²</td>
-                    <td>${cell.brightness || '-'}</td>
                 </tr>
             `).join('');
 
@@ -195,7 +198,6 @@
                                 <th>Radius</th>
                                 <th>Intensity</th>
                                 <th>Area</th>
-                                <th>Brightness</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -236,6 +238,35 @@
                 }
             } catch (error) {
                 showError('Failed to analyze image: ' + error.message, 'analysisResults');
+            }
+        }
+
+        // Analyze sample image
+        async function analyzeSampleImage() {
+            const resultsDiv = document.getElementById('analysisResults');
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>Analyzing sample image...</span>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/analyze_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sample: true })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayAnalysisResults(data);
+                } else {
+                    showError(data.error, 'analysisResults');
+                }
+            } catch (error) {
+                showError('Failed to analyze sample image: ' + error.message, 'analysisResults');
             }
         }
 
