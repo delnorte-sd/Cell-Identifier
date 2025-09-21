@@ -34,7 +34,7 @@
                 <div class="control-group">
                     <div class="form-group">
                         <label for="numCells">Number of Cells:</label>
-                        <input type="number" id="numCells" min="1" max="50" value="15">
+                        <input type="number" id="numCells" min="1" max="50" value="125">
                     </div>
                     <div class="form-group">
                         <label for="noiseLevel">Background Noise Level:</label>
@@ -43,6 +43,19 @@
                             <option value="0.1" selected>Medium (Realistic)</option>
                             <option value="0.2">High (Noisy)</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cellShape">Cell Shape:</label>
+                        <select id="cellShape">
+                            <option value="pill" selected>Pill (E. coli-like)</option>
+                            <option value="ellipse">Ellipse (Variable intensity)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Allow Overlap:</label>
+                        <div class="toggle-box" id="allowOverlapToggle" onclick="toggleOverlap()">
+                            <span id="overlapText">Enabled</span>
+                        </div>
                     </div>
                     <button class="btn success" onclick="generateSynthetic()">
                         <i class="fas fa-magic"></i> Generate Image
@@ -149,10 +162,28 @@
             }
         });
 
+        // Toggle overlap functionality
+        let allowOverlap = true;
+        
+        function toggleOverlap() {
+            allowOverlap = !allowOverlap;
+            const toggleBox = document.getElementById('allowOverlapToggle');
+            const overlapText = document.getElementById('overlapText');
+            
+            if (allowOverlap) {
+                toggleBox.classList.remove('disabled');
+                overlapText.textContent = 'Enabled';
+            } else {
+                toggleBox.classList.add('disabled');
+                overlapText.textContent = 'Disabled';
+            }
+        }
+
         // Generate synthetic cell images
         async function generateSynthetic() {
             const numCells = document.getElementById('numCells').value;
             const noiseLevel = document.getElementById('noiseLevel').value;
+            const cellShape = document.getElementById('cellShape').value;
             const resultsDiv = document.getElementById('syntheticResults');
 
             // Show loading
@@ -171,7 +202,9 @@
                     },
                     body: JSON.stringify({
                         num_cells: parseInt(numCells),
-                        noise_level: parseFloat(noiseLevel)
+                        noise_level: parseFloat(noiseLevel),
+                        cell_shape: cellShape,
+                        allow_overlap: allowOverlap
                     })
                 });
 
@@ -191,20 +224,59 @@
         function displaySyntheticResults(data) {
             const resultsDiv = document.getElementById('syntheticResults');
 
-            const cellDataRows = data.cell_data.map((cell, index) => `
-                <tr>
-                    <td>Cell ${index + 1}</td>
-                    <td>(${cell.center[0]}, ${cell.center[1]})</td>
-                    <td>${cell.radius}px</td>
-                    <td>${(cell.intensity * 100).toFixed(1)}%</td>
-                    <td>${cell.area}px²</td>
-                </tr>
-            `).join('');
+            let cellDataRows, tableHeaders;
+            
+            if (data.cell_shape === 'pill') {
+                tableHeaders = `
+                    <th>Cell ID</th>
+                    <th>Center (x,y)</th>
+                    <th>Length</th>
+                    <th>Width</th>
+                    <th>Intensity</th>
+                    <th>Area</th>
+                `;
+                cellDataRows = data.cell_data.map((cell, index) => `
+                    <tr>
+                        <td>Cell ${index + 1}</td>
+                        <td>(${cell.center[0]}, ${cell.center[1]})</td>
+                        <td>${cell.length}px</td>
+                        <td>${cell.width}px</td>
+                        <td>${(cell.intensity * 100).toFixed(1)}%</td>
+                        <td>${cell.area}px²</td>
+                    </tr>
+                `).join('');
+            } else {
+                tableHeaders = `
+                    <th>Cell ID</th>
+                    <th>Center (x,y)</th>
+                    <th>Major Axis</th>
+                    <th>Minor Axis</th>
+                    <th>Intensity</th>
+                    <th>Area</th>
+                `;
+                cellDataRows = data.cell_data.map((cell, index) => `
+                    <tr>
+                        <td>Cell ${index + 1}</td>
+                        <td>(${cell.center[0]}, ${cell.center[1]})</td>
+                        <td>${cell.major_axis}px</td>
+                        <td>${cell.minor_axis}px</td>
+                        <td>${(cell.intensity * 100).toFixed(1)}%</td>
+                        <td>${cell.area}px²</td>
+                    </tr>
+                `).join('');
+            }
 
             resultsDiv.innerHTML = `
                 <div class="result-card">
                     <h3><i class="fas fa-magic"></i> Generated Synthetic Image</h3>
-                    <img src="${data.image}" alt="Synthetic Cell Image" class="result-image">
+                    <div style="text-align: center;">
+                        <a href="${data.image}" download="synthetic_cells.png" title="Click to download image" style="display: inline-block;">
+                            <img src="${data.image}" alt="Synthetic Cell Image" class="result-image download-hover">
+                        </a>
+                    </div>
+                    <div style="text-align:center; font-size:0.9rem; color:#666; margin-bottom:15px;">
+                        <i class="fas fa-download"></i> Click image to download
+                    </div>
                     <div class="stats-grid">
                         <div class="stat-item">
                             <div class="stat-value">${data.cell_count}</div>
@@ -224,11 +296,7 @@
                     <table class="cell-data-table">
                         <thead>
                             <tr>
-                                <th>Cell ID</th>
-                                <th>Center (x,y)</th>
-                                <th>Radius</th>
-                                <th>Intensity</th>
-                                <th>Area</th>
+                                ${tableHeaders}
                             </tr>
                         </thead>
                         <tbody>

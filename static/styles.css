@@ -104,6 +104,11 @@ body {
     min-width: 200px;
 }
 
+.form-group:has(.toggle-box) {
+    flex: 0 0 150px;
+    min-width: 150px;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 8px;
@@ -125,6 +130,57 @@ body {
     outline: none;
     border-color: #333;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.form-group input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    transform: scale(1.2);
+    accent-color: #333;
+}
+
+.form-group label:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    padding: 12px 0;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.form-group label:has(input[type="checkbox"]):hover {
+    background-color: rgba(51, 51, 51, 0.05);
+    padding: 12px 8px;
+}
+
+.toggle-box {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 1rem;
+    background: #333;
+    color: white;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.toggle-box:hover {
+    background: #555;
+}
+
+.toggle-box.disabled {
+    background: #666;
+    color: #ccc;
+}
+
+.toggle-box.disabled:hover {
+    background: #777;
 }
 
 .btn {
@@ -200,6 +256,14 @@ body {
     border-radius: 10px;
     border: 2px solid #e0e0e0;
     margin-bottom: 15px;
+}
+
+.download-hover {
+    cursor: pointer;
+}
+
+.download-hover:hover {
+    opacity: 0.8;
 }
 
 .stats-grid {

@@ -27,32 +27,30 @@ class SyntheticCellGenerator:
     def __init__(self, image_size=(512, 512)):
         self.image_size = image_size
         
-    def generate_cell_image(self, num_cells=None, background_noise_level=0.1):
+    def generate_cell_image(self, num_cells=None, background_noise_level=0.1, allow_overlap=True, cell_shape='pill'):
         """Generate a synthetic cell image with fluorescent cells"""
         if num_cells is None:
             num_cells = random.randint(50, 100)
         
-        # Create base image with 3 channels for color (BGR)
+        self.allow_overlap = allow_overlap
+        self.cell_shape = cell_shape
+        
         img = np.zeros((*self.image_size, 3), dtype=np.float32)
         cell_data = []
         
-        # Generate cells
         attempts = 0
-        max_attempts = num_cells * 3
+        max_attempts = num_cells * 10
         while len(cell_data) < num_cells and attempts < max_attempts:
             cell_info = self._add_cell(img)
             if cell_info:
                 cell_data.append(cell_info)
             attempts += 1
         
-        # Add background noise
         noise = np.random.normal(0, background_noise_level, img.shape)
         img += noise
         
-        # Apply gaussian blur to simulate microscope optics
         img = cv2.GaussianBlur(img, (5, 5), 1.5)
         
-        # Normalize to 0-255 range
         img = np.clip(img * 255, 0, 255).astype(np.uint8)
         
         return img, cell_data
@@ -61,48 +59,97 @@ class SyntheticCellGenerator:
         """Add a single cell to the image"""
         h, w = img.shape[:2]
         
-        # Random cell properties
         center_x = random.randint(50, w - 50)
         center_y = random.randint(50, h - 50)
-        major_axis = random.randint(10, 25)
-        minor_axis = random.randint(4, int(major_axis * 0.6))
-        angle = random.randint(0, 180)
-        intensity = random.uniform(1, 2)
         
-        # Check for overlap with existing cells
-        if self._check_overlap(img, center_x, center_y, major_axis):
+        if getattr(self, 'cell_shape', 'pill') == 'ellipse':
+            return self._add_ellipse_cell(img, center_x, center_y, h, w)
+        else:
+            return self._add_pill_cell(img, center_x, center_y, h, w)
+    
+    def _add_pill_cell(self, img, center_x, center_y, h, w):
+        """Add a pill-shaped cell"""
+        length = random.randint(8, 20)
+        width = random.randint(3, 6)
+        angle = random.randint(0, 180)
+        intensity = random.uniform(0.8, 1.2)
+        
+        if self._check_overlap(img, center_x, center_y, length):
             return None
         
-        # Create ellipse mask
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.ellipse(mask, (center_x, center_y), (major_axis//2, minor_axis//2), angle, 0, 360, 255, -1)
         
-        # Add bright green cell
-        y, x = np.ogrid[:h, :w]
-        
-        # Calculate distance from ellipse center considering rotation
         cos_a = np.cos(np.radians(angle))
         sin_a = np.sin(np.radians(angle))
+        half_length = length // 2
+        
+        x1 = int(center_x - half_length * cos_a)
+        y1 = int(center_y - half_length * sin_a)
+        x2 = int(center_x + half_length * cos_a)
+        y2 = int(center_y + half_length * sin_a)
+        
+        cv2.line(mask, (x1, y1), (x2, y2), 255, width)
+        cv2.circle(mask, (x1, y1), width//2, 255, -1)
+        cv2.circle(mask, (x2, y2), width//2, 255, -1)
+        
+        y, x = np.ogrid[:h, :w]
         dx = x - center_x
         dy = y - center_y
-        
-        # Rotate coordinates
         x_rot = cos_a * dx + sin_a * dy
         y_rot = -sin_a * dx + cos_a * dy
+        dist_from_center = np.abs(y_rot)
         
-        # Ellipse distance function
-        ellipse_dist = np.sqrt((x_rot / (major_axis/2))**2 + (y_rot / (minor_axis/2))**2)
+        cell_intensity = intensity * (1.0 - 0.2 * (dist_from_center / (width/2)))
+        cell_intensity = np.clip(cell_intensity, 0.6 * intensity, intensity)
         
-        # Create intensity gradient (brighter center)
-        cell_intensity = intensity * np.exp(-ellipse_dist * 2)
-        
-        # Apply mask and add bright green color
         mask_bool = mask > 0
         img[mask_bool, 0] += cell_intensity[mask_bool] * (26/255)
         img[mask_bool, 1] += cell_intensity[mask_bool] * (251/255)
         img[mask_bool, 2] += cell_intensity[mask_bool] * (115/255)
         
-        # Calculate area
+        area = np.sum(mask_bool)
+        
+        return {
+            'center': (center_x, center_y),
+            'length': length,
+            'width': width,
+            'angle': angle,
+            'intensity': intensity,
+            'area': area
+        }
+    
+    def _add_ellipse_cell(self, img, center_x, center_y, h, w):
+        """Add an ellipse-shaped cell with variable intensity"""
+        major_axis = random.randint(10, 25)
+        minor_axis = random.randint(6, int(major_axis * 0.8))
+        angle = random.randint(0, 180)
+        intensity = random.uniform(0.8, 1.0)
+        
+        if self._check_overlap(img, center_x, center_y, major_axis):
+            return None
+        
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.ellipse(mask, (center_x, center_y), (major_axis//2, minor_axis//2), angle, 0, 360, 255, -1)
+        
+        y, x = np.ogrid[:h, :w]
+        
+        cos_a = np.cos(np.radians(angle))
+        sin_a = np.sin(np.radians(angle))
+        dx = x - center_x
+        dy = y - center_y
+        
+        x_rot = cos_a * dx + sin_a * dy
+        y_rot = -sin_a * dx + cos_a * dy
+        
+        ellipse_dist = np.sqrt((x_rot / (major_axis/2))**2 + (y_rot / (minor_axis/2))**2)
+        
+        cell_intensity = intensity * np.exp(-ellipse_dist * 2)
+        
+        mask_bool = mask > 0
+        img[mask_bool, 0] += cell_intensity[mask_bool] * (26/255)
+        img[mask_bool, 1] += cell_intensity[mask_bool] * (251/255)
+        img[mask_bool, 2] += cell_intensity[mask_bool] * (115/255)
+        
         area = np.sum(mask_bool)
         
         return {
@@ -115,15 +162,36 @@ class SyntheticCellGenerator:
         }
     
     def _check_overlap(self, img, x, y, radius):
-        """Check if new cell overlaps with existing cells"""
-        h, w = img.shape[:2]
-        y_min = max(0, y - radius)
-        y_max = min(h, y + radius)
-        x_min = max(0, x - radius)
-        x_max = min(w, x + radius)
+        """Check if new cell overlaps significantly with existing cells"""
+        # If overlap is disabled, always reject any overlap
+        if not getattr(self, 'allow_overlap', True):
+            h, w = img.shape[:2]
+            y_min = max(0, y - radius)
+            y_max = min(h, y + radius)
+            x_min = max(0, x - radius)
+            x_max = min(w, x + radius)
+            
+            region = img[y_min:y_max, x_min:x_max, 1]  # Check green channel
+            return np.max(region) > 0.01  # Very low threshold for no overlap
         
-        region = img[y_min:y_max, x_min:x_max, 1]
-        return np.max(region) > 0.05
+        # Original overlap logic for when overlap is allowed
+        h, w = img.shape[:2]
+        # Check a smaller region to allow more overlap
+        check_radius = radius // 2  # Only check half the radius
+        y_min = max(0, y - check_radius)
+        y_max = min(h, y + check_radius)
+        x_min = max(0, x - check_radius)
+        x_max = min(w, x + check_radius)
+        
+        region = img[y_min:y_max, x_min:x_max, 1]  # Check green channel
+        
+        # Very permissive overlap detection - only prevent cells directly on top of each other
+        max_intensity = np.max(region)
+        
+        # Only reject if there's a very bright spot (almost complete overlap)
+        severe_overlap = max_intensity > 1.0  # Very high threshold
+        
+        return severe_overlap
 
 class SimpleCellAnalyzer:
     """Simplified cell detection and analysis using traditional computer vision"""
@@ -259,37 +327,49 @@ def generate_synthetic():
             num_cells = int(num_cells)
 
         noise_level = float(data.get('noise_level', 0.1))
+        allow_overlap = data.get('allow_overlap', True)
+        cell_shape = data.get('cell_shape', 'pill')
                 
-        # Generate synthetic image
         synthetic_img, cell_data = cell_generator.generate_cell_image(
             num_cells=num_cells,
-            background_noise_level=noise_level
+            background_noise_level=noise_level,
+            allow_overlap=allow_overlap,
+            cell_shape=cell_shape
         )
         
-        # Convert to base64 for web display
         pil_img = Image.fromarray(cv2.cvtColor(synthetic_img, cv2.COLOR_BGR2RGB))
         buffer = BytesIO()
         pil_img.save(buffer, format='PNG')
         img_str = base64.b64encode(buffer.getvalue()).decode()
         
-        # Convert numpy types to Python native types for JSON serialization
         serializable_cell_data = []
         for cell in cell_data:
-            serializable_cell = {
-                'center': (int(cell['center'][0]), int(cell['center'][1])),
-                'major_axis': int(cell['major_axis']),
-                'minor_axis': int(cell['minor_axis']),
-                'angle': int(cell['angle']),
-                'intensity': float(cell['intensity']),
-                'area': int(cell['area'])
-            }
+            if cell_shape == 'pill':
+                serializable_cell = {
+                    'center': (int(cell['center'][0]), int(cell['center'][1])),
+                    'length': int(cell['length']),
+                    'width': int(cell['width']),
+                    'angle': int(cell['angle']),
+                    'intensity': float(cell['intensity']),
+                    'area': int(cell['area'])
+                }
+            else:
+                serializable_cell = {
+                    'center': (int(cell['center'][0]), int(cell['center'][1])),
+                    'major_axis': int(cell['major_axis']),
+                    'minor_axis': int(cell['minor_axis']),
+                    'angle': int(cell['angle']),
+                    'intensity': float(cell['intensity']),
+                    'area': int(cell['area'])
+                }
             serializable_cell_data.append(serializable_cell)
         
         return jsonify({
             'success': True,
             'image': f"data:image/png;base64,{img_str}",
             'cell_count': len(serializable_cell_data),
-            'cell_data': serializable_cell_data
+            'cell_data': serializable_cell_data,
+            'cell_shape': cell_shape
         })
         
     except Exception as e:
