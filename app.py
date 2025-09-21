@@ -30,20 +30,23 @@ class SyntheticCellGenerator:
     def generate_cell_image(self, num_cells=None, background_noise_level=0.1):
         """Generate a synthetic cell image with fluorescent cells"""
         if num_cells is None:
-            num_cells = random.randint(5, 25)
+            num_cells = random.randint(50, 100)
         
-        # Create base image
-        img = np.zeros(self.image_size, dtype=np.float32)
+        # Create base image with 3 channels for color (BGR)
+        img = np.zeros((*self.image_size, 3), dtype=np.float32)
         cell_data = []
         
         # Generate cells
-        for i in range(num_cells):
+        attempts = 0
+        max_attempts = num_cells * 3
+        while len(cell_data) < num_cells and attempts < max_attempts:
             cell_info = self._add_cell(img)
             if cell_info:
                 cell_data.append(cell_info)
+            attempts += 1
         
         # Add background noise
-        noise = np.random.normal(0, background_noise_level, self.image_size)
+        noise = np.random.normal(0, background_noise_level, img.shape)
         img += noise
         
         # Apply gaussian blur to simulate microscope optics
@@ -56,47 +59,71 @@ class SyntheticCellGenerator:
     
     def _add_cell(self, img):
         """Add a single cell to the image"""
-        h, w = img.shape
+        h, w = img.shape[:2]
         
         # Random cell properties
         center_x = random.randint(50, w - 50)
         center_y = random.randint(50, h - 50)
-        radius = random.randint(15, 35)
-        intensity = random.uniform(0.4, 1.0)  # GFP intensity
+        major_axis = random.randint(10, 25)
+        minor_axis = random.randint(4, int(major_axis * 0.6))
+        angle = random.randint(0, 180)
+        intensity = random.uniform(1, 2)
         
         # Check for overlap with existing cells
-        if self._check_overlap(img, center_x, center_y, radius):
+        if self._check_overlap(img, center_x, center_y, major_axis):
             return None
         
-        # Create cell mask
+        # Create ellipse mask
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.ellipse(mask, (center_x, center_y), (major_axis//2, minor_axis//2), angle, 0, 360, 255, -1)
+        
+        # Add bright green cell
         y, x = np.ogrid[:h, :w]
-        mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= radius ** 2
         
-        # Add cell with intensity gradient (brighter center)
-        cell_img = np.zeros_like(img)
-        distances = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
-        cell_intensity = intensity * np.exp(-distances / (radius * 0.6))
-        cell_img[mask] = cell_intensity[mask]
+        # Calculate distance from ellipse center considering rotation
+        cos_a = np.cos(np.radians(angle))
+        sin_a = np.sin(np.radians(angle))
+        dx = x - center_x
+        dy = y - center_y
         
-        img += cell_img
+        # Rotate coordinates
+        x_rot = cos_a * dx + sin_a * dy
+        y_rot = -sin_a * dx + cos_a * dy
+        
+        # Ellipse distance function
+        ellipse_dist = np.sqrt((x_rot / (major_axis/2))**2 + (y_rot / (minor_axis/2))**2)
+        
+        # Create intensity gradient (brighter center)
+        cell_intensity = intensity * np.exp(-ellipse_dist * 2)
+        
+        # Apply mask and add bright green color
+        mask_bool = mask > 0
+        img[mask_bool, 0] += cell_intensity[mask_bool] * (26/255)
+        img[mask_bool, 1] += cell_intensity[mask_bool] * (251/255)
+        img[mask_bool, 2] += cell_intensity[mask_bool] * (115/255)
+        
+        # Calculate area
+        area = np.sum(mask_bool)
         
         return {
             'center': (center_x, center_y),
-            'radius': radius,
+            'major_axis': major_axis,
+            'minor_axis': minor_axis,
+            'angle': angle,
             'intensity': intensity,
-            'area': np.sum(mask)
+            'area': area
         }
     
     def _check_overlap(self, img, x, y, radius):
         """Check if new cell overlaps with existing cells"""
-        h, w = img.shape
+        h, w = img.shape[:2]
         y_min = max(0, y - radius)
         y_max = min(h, y + radius)
         x_min = max(0, x - radius)
         x_max = min(w, x + radius)
         
-        region = img[y_min:y_max, x_min:x_max]
-        return np.max(region) > 0.1  # Threshold for existing cell detection
+        region = img[y_min:y_max, x_min:x_max, 1]
+        return np.max(region) > 0.05
 
 class SimpleCellAnalyzer:
     """Simplified cell detection and analysis using traditional computer vision"""
@@ -155,9 +182,9 @@ class SimpleCellAnalyzer:
                 mean_intensity = cv2.mean(img, mask=mask)[0]
 
                 # Classify brightness
-                if mean_intensity < 100:
+                if mean_intensity < 73:
                     brightness = "Low"
-                elif mean_intensity < 170:
+                elif mean_intensity < 80:
                     brightness = "Medium"
                 else:
                     brightness = "High"
@@ -213,7 +240,7 @@ def generate_synthetic():
         data = request.get_json()
         num_cells = data.get('num_cells')
         if num_cells is None:
-            num_cells = random.randint(5, 25)
+            num_cells = random.randint(50, 100)
         else:
             num_cells = int(num_cells)
 
@@ -226,7 +253,7 @@ def generate_synthetic():
         )
         
         # Convert to base64 for web display
-        pil_img = Image.fromarray(synthetic_img)
+        pil_img = Image.fromarray(cv2.cvtColor(synthetic_img, cv2.COLOR_BGR2RGB))
         buffer = BytesIO()
         pil_img.save(buffer, format='PNG')
         img_str = base64.b64encode(buffer.getvalue()).decode()
@@ -236,7 +263,9 @@ def generate_synthetic():
         for cell in cell_data:
             serializable_cell = {
                 'center': (int(cell['center'][0]), int(cell['center'][1])),
-                'radius': int(cell['radius']),
+                'major_axis': int(cell['major_axis']),
+                'minor_axis': int(cell['minor_axis']),
+                'angle': int(cell['angle']),
                 'intensity': float(cell['intensity']),
                 'area': int(cell['area'])
             }
@@ -309,7 +338,7 @@ def demo_analysis():
     try:
         # Generate synthetic image
         synthetic_img, true_cell_data = cell_generator.generate_cell_image(
-            num_cells=random.randint(8, 15)
+            num_cells=random.randint(50, 100)
         )
         
         # Analyze the synthetic image
