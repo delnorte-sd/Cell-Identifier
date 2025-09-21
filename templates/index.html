@@ -57,6 +57,37 @@
             <div class="control-panel">
                 <h3><i class="fas fa-upload"></i> Upload Your Cell Image</h3>
                 <br>
+                
+                <!-- Calibration Section -->
+                <div class="calibration-section">
+                    <div class="calibration-header" onclick="toggleCalibration()">
+                        <h4><i class="fas fa-cogs"></i> Calibration</h4>
+                        <i class="fas fa-chevron-down" id="calibrationChevron"></i>
+                    </div>
+                    <div class="calibration-content" id="calibrationContent">
+                        <div class="form-group">
+                            <label for="minCellArea">Min Cell Area (px²): <span id="minCellAreaValue">50</span></label>
+                            <input type="range" id="minCellArea" min="10" max="1000" value="50" step="10"
+                                oninput="document.getElementById('minCellAreaValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="maxCellArea">Max Cell Area (px²): <span id="maxCellAreaValue">3000</span></label>
+                            <input type="range" id="maxCellArea" min="500" max="20000" value="3000" step="100"
+                                oninput="document.getElementById('maxCellAreaValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="intensityThreshold">Intensity Threshold: <span id="intensityThresholdValue">50</span></label>
+                            <input type="range" id="intensityThreshold" min="10" max="200" value="50" step="5"
+                                oninput="document.getElementById('intensityThresholdValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="blurKernel">Gaussian Blur Size: <span id="blurKernelValue">5</span></label>
+                            <input type="range" id="blurKernel" min="1" max="15" value="5" step="2"
+                                oninput="document.getElementById('blurKernelValue').textContent = this.value">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="file-upload" onclick="document.getElementById('fileInput').click()">
                     <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
                     <h4>Click to upload or drag & drop your image here</h4>
@@ -222,6 +253,12 @@
 
             const formData = new FormData();
             formData.append('file', file);
+            
+            // Get threshold values from sliders
+            formData.append('min_cell_area', document.getElementById('minCellArea').value);
+            formData.append('max_cell_area', document.getElementById('maxCellArea').value);
+            formData.append('intensity_threshold', document.getElementById('intensityThreshold').value);
+            formData.append('blur_kernel', document.getElementById('blurKernel').value);
 
             try {
                 const response = await fetch('/analyze_image', {
@@ -257,7 +294,13 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ sample: true })
+                    body: JSON.stringify({ 
+                        sample: true,
+                        min_cell_area: parseInt(document.getElementById('minCellArea').value),
+                        max_cell_area: parseInt(document.getElementById('maxCellArea').value),
+                        intensity_threshold: parseInt(document.getElementById('intensityThreshold').value),
+                        blur_kernel: parseInt(document.getElementById('blurKernel').value)
+                    })
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -335,8 +378,25 @@
             `;
         }
 
-        // Initialize the application
+        // Toggle calibration section
+        function toggleCalibration() {
+            const content = document.getElementById('calibrationContent');
+            const chevron = document.getElementById('calibrationChevron');
+            
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                chevron.classList.remove('fa-chevron-down');
+                chevron.classList.add('fa-chevron-up');
+            } else {
+                content.style.display = 'none';
+                chevron.classList.remove('fa-chevron-up');
+                chevron.classList.add('fa-chevron-down');
+            }
+        }
+
+        // Initialize calibration as collapsed
         document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('calibrationContent').style.display = 'none';
             console.log('Cell Image Analysis Tool Loaded Successfully!');
         });
     </script>

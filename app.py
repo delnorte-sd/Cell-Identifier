@@ -129,8 +129,21 @@ class SimpleCellAnalyzer:
     """Simplified cell detection and analysis using traditional computer vision"""
     
     def __init__(self):
-        self.min_cell_area = 10
-        self.max_cell_area = 30000
+        self.min_cell_area = 50
+        self.max_cell_area = 3000
+        self.intensity_threshold = 50
+        self.blur_kernel = 5
+        
+    def set_parameters(self, min_area=None, max_area=None, intensity_thresh=None, blur_size=None):
+        """Set detection parameters"""
+        if min_area is not None:
+            self.min_cell_area = min_area
+        if max_area is not None:
+            self.max_cell_area = max_area
+        if intensity_thresh is not None:
+            self.intensity_threshold = intensity_thresh
+        if blur_size is not None:
+            self.blur_kernel = blur_size
         
     def analyze_image(self, image_path):
         """Analyze cell image and return detection results"""
@@ -143,11 +156,12 @@ class SimpleCellAnalyzer:
         if img is None:
             return None, None
             
-        # Preprocessing
-        img_blur = cv2.GaussianBlur(img, (5, 5), 0)
+        # Preprocessing with user-defined blur kernel
+        blur_size = self.blur_kernel if self.blur_kernel % 2 == 1 else self.blur_kernel + 1  # Ensure odd
+        img_blur = cv2.GaussianBlur(img, (blur_size, blur_size), 0)
         
-        # Thresholding
-        _, thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Thresholding with user-defined intensity threshold
+        _, thresh = cv2.threshold(img_blur, self.intensity_threshold, 255, cv2.THRESH_BINARY)
         
         # Morphological operations
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -157,7 +171,7 @@ class SimpleCellAnalyzer:
         # Find contours
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Filter contours by area
+        # Filter contours by user-defined area range
         valid_contours = []
         cell_data = []
         
@@ -285,6 +299,22 @@ def generate_synthetic():
 def analyze_image():
     """Analyze uploaded cell image"""
     try:
+        # Get parameters from request
+        if request.is_json:
+            data = request.get_json()
+            min_area = data.get('min_cell_area', 50)
+            max_area = data.get('max_cell_area', 3000)
+            intensity_thresh = data.get('intensity_threshold', 50)
+            blur_kernel = data.get('blur_kernel', 5)
+        else:
+            min_area = int(request.form.get('min_cell_area', 50))
+            max_area = int(request.form.get('max_cell_area', 3000))
+            intensity_thresh = int(request.form.get('intensity_threshold', 50))
+            blur_kernel = int(request.form.get('blur_kernel', 5))
+
+        # Set analyzer parameters
+        cell_analyzer.set_parameters(min_area, max_area, intensity_thresh, blur_kernel)
+
         # Check for sample image request
         if request.is_json and request.get_json().get('sample'):
             sample_path = os.path.join(os.path.dirname(__file__), 'static/sample.jpeg')
