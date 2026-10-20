@@ -49,7 +49,11 @@ cell_identifier = ["py.typed", "web/templates/*.html", "web/static/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
-filterwarnings = ["error::DeprecationWarning:cell_identifier.*"]
+filterwarnings = [
+    "error::DeprecationWarning:cell_identifier.*",
+    # scikit-image <= 0.26 sets ndarray.shape internally, deprecated in NumPy 2.5
+    "ignore:Setting the shape on a NumPy array:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["cell_identifier"]
