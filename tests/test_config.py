@@ -129,3 +129,10 @@ def test_load_config_errors(tmp_path: Path) -> None:
     yaml.write_text("a: 1", encoding="utf-8")
     with pytest.raises(ConfigError, match=r"\.toml or \.json"):
         load_config_file(yaml, AnalysisConfig)
+
+
+def test_example_config_file_loads() -> None:
+    example = Path(__file__).resolve().parents[1] / "examples" / "analysis.toml"
+    config = load_config_file(example, AnalysisConfig)
+    assert config.segmentation.split_method == "intensity"
+    assert config.classification.low_cutoff == pytest.approx(142 / 255, abs=1e-4)

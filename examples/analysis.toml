@@ -1,0 +1,33 @@
+# Example Cell Identifier analysis configuration.
+# Use with:  cell-identifier analyze images/ -c examples/analysis.toml
+# Every key is optional; omitted keys keep their defaults (see `cell-identifier config`).
+# Intensity values are fractions of full scale (0-1), valid for 8- and 16-bit images.
+
+# Physical pixel size in micrometres (enables µm / µm² outputs and cells per mm²).
+# pixel_size_um = 0.065
+
+[preprocess]
+channel = "gray"          # gray | red | green | blue | max   ("green" for GFP in RGB images)
+denoise = "gaussian"      # none | gaussian | median
+denoise_sigma = 1.0       # px
+background = "none"       # none | tophat | gaussian   (use tophat for vignetting / haze)
+background_radius = 25.0  # px; must exceed the largest cell radius
+
+[segmentation]
+threshold_method = "otsu" # otsu | triangle | fixed | adaptive
+fixed_threshold = 0.2     # used when threshold_method = "fixed"
+min_snr = 3.0             # noise floor in robust standard deviations; 0 disables
+opening_radius = 1        # px; removes single-pixel speckle
+split_method = "intensity" # intensity | distance | none
+intensity_h = 0.05        # raise to merge more, lower to split more (intensity mode)
+watershed_h = 1.0         # px (distance mode)
+
+[filter]
+min_area = 15             # px
+max_area = 5000           # px
+exclude_border = false    # true for unbiased size/shape statistics
+
+[classification]
+method = "absolute"       # absolute | quantile | none
+low_cutoff = 0.5569       # 142/255 - recalibrate for your microscope and exposure!
+high_cutoff = 0.6118      # 156/255
