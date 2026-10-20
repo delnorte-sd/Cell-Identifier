@@ -3,10 +3,13 @@
 Method summary
 --------------
 1. **Threshold** the processed image (Otsu, triangle, fixed or local-adaptive).
-2. Raise the threshold to a **noise floor** ``median + k·σ`` where σ is a robust
-   noise estimate (1.4826 × median absolute deviation). Automatic thresholds
-   always split a histogram in two, even one that contains only noise; the
-   floor makes "no cells" a possible answer.
+2. Raise the threshold to a **noise floor** ``median + k·σ``. σ is a robust
+   estimate of pixel noise: 1.4826 × the median absolute deviation of the image
+   *after subtracting its local mean*, so slow illumination gradients do not
+   inflate it. Automatic thresholds always split a histogram in two, even one
+   that contains only noise; the floor makes "no cells" a possible answer. For
+   the adaptive method the floor is local: a pixel must exceed its local mean
+   by at least ``k·σ``.
 3. **Morphology**: opening removes speckle, optional closing bridges gaps,
    holes are filled.
 4. **Watershed** (optional): the Euclidean distance transform of the mask is
@@ -35,6 +38,7 @@ from .preprocessing import disk
 __all__ = [
     "SegmentationResult",
     "compute_threshold",
+    "estimate_noise_sigma",
     "h_maxima",
     "noise_floor",
     "segment",
@@ -55,6 +59,7 @@ class SegmentationResult:
         threshold: Threshold actually applied (fraction of full scale). For the
             adaptive method this is the median of the local threshold map.
         noise_floor: Lower bound imposed by ``min_snr`` (fraction of full scale).
+            For the adaptive method this is the minimum margin above the local mean.
     """
 
     labels: np.ndarray
@@ -63,13 +68,28 @@ class SegmentationResult:
     noise_floor: float
 
 
-def noise_floor(image: np.ndarray, min_snr: float) -> float:
-    """Return ``median + min_snr * sigma`` with sigma estimated from the MAD."""
-    median = float(np.median(image))
+def estimate_noise_sigma(image: np.ndarray, window: int = 51) -> float:
+    """Robust standard deviation of pixel noise.
+
+    Computes 1.4826 × MAD of the residual ``image - box_mean(image, window)``.
+    Removing the local mean makes the estimate insensitive to illumination
+    gradients; the median makes it robust to cells, provided they cover less
+    than half of each window. Densely packed bright cells still bias the
+    estimate slightly upwards (a conservative, i.e. higher, noise floor).
+    """
+    residual = image - cv2.blur(image, (window, window), borderType=cv2.BORDER_REPLICATE)
+    centre = float(np.median(residual))
+    return _MAD_TO_SIGMA * float(np.median(np.abs(residual - centre)))
+
+
+def noise_floor(image: np.ndarray, min_snr: float, window: int = 51) -> float:
+    """Return the global noise floor ``median(image) + min_snr * sigma``.
+
+    Returns ``-inf`` when ``min_snr`` is 0 (floor disabled).
+    """
     if min_snr <= 0:
         return float("-inf")
-    mad = float(np.median(np.abs(image - median)))
-    return median + min_snr * _MAD_TO_SIGMA * mad
+    return float(np.median(image)) + min_snr * estimate_noise_sigma(image, window)
 
 
 def _histogram_threshold(image: np.ndarray, method: str) -> float:
@@ -93,7 +113,7 @@ def compute_threshold(image: np.ndarray, config: SegmentationConfig) -> np.ndarr
         return config.fixed_threshold
     if method == "adaptive":
         size = config.adaptive_block_size
-        local_mean = cv2.blur(image, (size, size), borderType=cv2.BORDER_REFLECT)
+        local_mean = cv2.blur(image, (size, size), borderType=cv2.BORDER_REPLICATE)
         return local_mean + np.float32(config.adaptive_offset)
     raise ValueError(f"unknown threshold method {method!r}")
 
@@ -158,9 +178,17 @@ def split_touching(
 
 def segment(image: np.ndarray, config: SegmentationConfig) -> SegmentationResult:
     """Segment a processed (fraction-of-full-scale) image into labelled objects."""
-    raw = compute_threshold(image, config)
-    floor = noise_floor(image, config.min_snr)
-    threshold = np.maximum(raw, np.float32(floor))
+    window = config.adaptive_block_size
+    threshold: np.ndarray | float
+    if config.threshold_method == "adaptive":
+        sigma = estimate_noise_sigma(image, window) if config.min_snr > 0 else 0.0
+        margin = max(config.adaptive_offset, config.min_snr * sigma)
+        local_mean = cv2.blur(image, (window, window), borderType=cv2.BORDER_REPLICATE)
+        threshold = local_mean + np.float32(margin)
+        floor = config.min_snr * sigma
+    else:
+        floor = noise_floor(image, config.min_snr, window)
+        threshold = max(float(compute_threshold(image, config)), floor)
     mask = image > threshold
     if config.opening_radius > 0:
         mask = cv2.morphologyEx(
@@ -184,5 +212,5 @@ def segment(image: np.ndarray, config: SegmentationConfig) -> SegmentationResult
         labels=labels,
         mask=mask,
         threshold=reported,
-        noise_floor=max(floor, 0.0) if np.isfinite(floor) else 0.0,
+        noise_floor=max(float(floor), 0.0) if np.isfinite(floor) else 0.0,
     )

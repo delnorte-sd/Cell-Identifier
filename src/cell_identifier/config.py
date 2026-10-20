@@ -124,13 +124,16 @@ class SegmentationConfig:
             ``"fixed"`` uses ``fixed_threshold``; ``"adaptive"`` compares each pixel
             with its local mean, which tolerates uneven illumination.
         fixed_threshold: Global threshold as a fraction of full scale.
-        adaptive_block_size: Local window width in pixels (odd) for ``"adaptive"``.
+        adaptive_block_size: Local window width in pixels (odd) for ``"adaptive"``,
+            also used to detrend the image when estimating noise. Should be
+            several cell diameters wide.
         adaptive_offset: Added to the local mean, as a fraction of full scale.
         min_snr: Noise floor. Whatever the method, the threshold is never allowed
-            below ``median + min_snr * sigma`` of the image, where sigma is a robust
-            (MAD-based) noise estimate. Prevents an automatic threshold from
-            "finding" cells in pure noise. ``0`` disables the floor. Note that the
-            floor assumes cells cover less than half of the field of view.
+            below ``median + min_snr * sigma`` of the image (or, for ``"adaptive"``,
+            below ``local mean + min_snr * sigma``), where sigma is a robust,
+            gradient-insensitive estimate of pixel noise. Prevents an automatic
+            threshold from "finding" cells in pure noise. ``0`` disables the
+            floor. The estimate assumes cells cover less than half of the field.
         opening_radius: Radius in pixels of the morphological opening that removes
             single-pixel speckle. ``0`` disables. Keep this smaller than half of the
             narrowest cell width, or thin cells disappear.
