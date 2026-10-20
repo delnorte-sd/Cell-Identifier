@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Image Analysis by iGEM Team DelNorte-SD</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-microscope"></i> Cell Image Analysis</h1>
+            <p>By iGEM Team <b>DelNorte-SD</b> &middot; v{{ version }}</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="synthetic">
+                <i class="fas fa-magic"></i> Generate Synthetic Cells
+            </button>
+            <button class="tab-button" data-tab="analyze">
+                <i class="fas fa-search"></i> Analyze Real Images
+            </button>
+        </div>
+
+        <!-- Synthetic Image Generation Tab -->
+        <div id="synthetic" class="tab-content active">
+            <div class="control-panel">
+                <h3><i class="fas fa-magic"></i> Synthetic Cell Generator</h3>
+                <br>
+                <div class="control-group">
+                    <div class="form-group">
+                        <label for="numCells">Number of Cells (1-500):</label>
+                        <input type="number" id="numCells" min="1" max="500" value="60">
+                    </div>
+                    <div class="form-group">
+                        <label for="noiseLevel">Detector Noise:</label>
+                        <select id="noiseLevel">
+                            <option value="0.01">Low (Clean)</option>
+                            <option value="0.02" selected>Medium (Realistic)</option>
+                            <option value="0.05">High (Noisy)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cellShape">Cell Shape:</label>
+                        <select id="cellShape">
+                            <option value="pill" selected>Pill (E. coli-like rods)</option>
+                            <option value="ellipse">Ellipse</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="seed">Random Seed (optional):</label>
+                        <input type="number" id="seed" min="0" placeholder="random">
+                    </div>
+                    <div class="form-group">
+                        <label>Allow Overlap:</label>
+                        <div class="toggle-box disabled" id="allowOverlapToggle" onclick="toggleOverlap()">
+                            <span id="overlapText">Disabled</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="evaluate" checked> Score detection against ground truth</label>
+                    </div>
+                    <button class="btn success" onclick="generateSynthetic()">
+                        <i class="fas fa-magic"></i> Generate Image
+                    </button>
+                </div>
+            </div>
+            <div id="syntheticResults" class="results-grid"></div>
+        </div>
+
+        <!-- Image Analysis Tab -->
+        <div id="analyze" class="tab-content">
+            <div class="control-panel">
+                <h3><i class="fas fa-upload"></i> Upload Your Cell Image</h3>
+                <br>
+                
+                <!-- Calibration Section -->
+                <div class="calibration-section">
+                    <div class="calibration-header" onclick="toggleCalibration()">
+                        <h4><i class="fas fa-cogs"></i> Calibration</h4>
+                        <i class="fas fa-chevron-down" id="calibrationChevron"></i>
+                    </div>
+                    <div class="calibration-content" id="calibrationContent">
+                        <div class="form-group">
+                            <label for="channel">Signal channel:</label>
+                            <select id="channel">
+                                <option value="gray" selected>Grayscale (luminance)</option>
+                                <option value="green">Green (GFP)</option>
+                                <option value="red">Red</option>
+                                <option value="blue">Blue</option>
+                                <option value="max">Brightest channel</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="thresholdMethod">Threshold:</label>
+                            <select id="thresholdMethod" onchange="syncThresholdControls()">
+                                <option value="otsu" selected>Automatic (Otsu)</option>
+                                <option value="triangle">Automatic (Triangle, dim/sparse cells)</option>
+                                <option value="adaptive">Adaptive (uneven illumination)</option>
+                                <option value="fixed">Manual</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="manualThresholdGroup">
+                            <label for="manualThreshold">Manual threshold (0-255): <span id="manualThresholdValue">50</span></label>
+                            <input type="range" id="manualThreshold" min="1" max="254" value="50" step="1"
+                                oninput="document.getElementById('manualThresholdValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="splitMethod">Separate touching cells:</label>
+                            <select id="splitMethod">
+                                <option value="intensity" selected>By intensity valleys (packed rods)</option>
+                                <option value="distance">By shape necks (round cells)</option>
+                                <option value="none">Do not split</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="minCellArea">Min cell area (px²): <span id="minCellAreaValue">15</span></label>
+                            <input type="range" id="minCellArea" min="1" max="1000" value="15" step="1"
+                                oninput="document.getElementById('minCellAreaValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="maxCellArea">Max cell area (px²): <span id="maxCellAreaValue">5000</span></label>
+                            <input type="range" id="maxCellArea" min="100" max="20000" value="5000" step="100"
+                                oninput="document.getElementById('maxCellAreaValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label for="smoothingSigma">Smoothing σ (px, 0 = off): <span id="smoothingSigmaValue">1</span></label>
+                            <input type="range" id="smoothingSigma" min="0" max="5" value="1" step="0.5"
+                                oninput="document.getElementById('smoothingSigmaValue').textContent = this.value">
+                        </div>
+                        <div class="form-group">
+                            <label><input type="checkbox" id="excludeBorder"> Exclude cells touching the image edge</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
+                    <h4>Click to upload or drag & drop your image here</h4>
+                    <p>Supports JPG, PNG, TIFF formats</p>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;"
+                        onchange="handleFileSelect(this)">
+                </div>
+                <br>
+                <button class="btn info" onclick="analyzeSampleImage()" style="margin-bottom: 15px;">
+                    <i class="fas fa-image"></i> Use Sample Image (E. coli with GFP)
+                </button>
+            </div>
+            <div id="analysisResults" class="results-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        // ---------- helpers ----------
+        const $ = (id) => document.getElementById(id);
+        const fmt = (v, digits = 1) => (v === null || v === undefined) ? '–' : Number(v).toFixed(digits);
+
+        function showLoading(containerId, text) {
+            $(containerId).innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span></span>
+                </div>`;
+            $(containerId).querySelector('span').textContent = text;
+        }
+
+        // Errors are inserted as text, never as HTML.
+        function showError(message, containerId) {
+            const container = $(containerId);
+            container.innerHTML = `
+                <div class="error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span></span>
+                </div>`;
+            container.querySelector('span').textContent = message;
+        }
+
+        async function postJson(url, body) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return response.json();
+        }
+
+        function download(filename, content, type) {
+            const blob = content instanceof Blob ? content : new Blob([content], { type });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        // ---------- tabs ----------
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                button.classList.add('active');
+                $(button.dataset.tab).classList.add('active');
+            });
+        });
+
+        // ---------- upload ----------
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                analyzeImage(input.files[0]);
+            }
+        }
+
+        const fileUpload = document.querySelector('.file-upload');
+        fileUpload.addEventListener('dragover', (e) => { e.preventDefault(); fileUpload.classList.add('dragover'); });
+        fileUpload.addEventListener('dragleave', () => fileUpload.classList.remove('dragover'));
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                analyzeImage(e.dataTransfer.files[0]);
+            }
+        });
+
+        // ---------- synthetic generation ----------
+        let allowOverlap = false;
+
+        function toggleOverlap() {
+            allowOverlap = !allowOverlap;
+            $('allowOverlapToggle').classList.toggle('disabled', !allowOverlap);
+            $('overlapText').textContent = allowOverlap ? 'Enabled' : 'Disabled';
+        }
+
+        async function generateSynthetic() {
+            showLoading('syntheticResults', 'Generating synthetic cells...');
+            const seed = $('seed').value;
+            try {
+                const data = await postJson('/api/generate', {
+                    num_cells: parseInt($('numCells').value, 10),
+                    noise_level: parseFloat($('noiseLevel').value),
+                    cell_shape: $('cellShape').value,
+                    allow_overlap: allowOverlap,
+                    seed: seed === '' ? null : parseInt(seed, 10),
+                    evaluate: $('evaluate').checked
+                });
+                if (data.success) {
+                    displaySyntheticResults(data);
+                } else {
+                    showError(data.error, 'syntheticResults');
+                }
+            } catch (error) {
+                showError('Failed to generate synthetic image: ' + error.message, 'syntheticResults');
+            }
+        }
+
+        function displaySyntheticResults(data) {
+            const cells = data.cell_data;
+            const n = Math.max(cells.length, 1);
+            const avgIntensity = cells.reduce((s, c) => s + c.intensity, 0) / n;
+            const avgArea = cells.reduce((s, c) => s + c.area_px, 0) / n;
+            const lengthLabel = data.cell_shape === 'pill' ? 'Length' : 'Major axis';
+            const widthLabel = data.cell_shape === 'pill' ? 'Width' : 'Minor axis';
+            const rows = cells.map(c => `
+                <tr>
+                    <td>${c.cell_id}</td>
+                    <td>(${fmt(c.center_x)}, ${fmt(c.center_y)})</td>
+                    <td>${fmt(c.length)}px</td>
+                    <td>${fmt(c.width)}px</td>
+                    <td>${fmt(c.angle_deg)}°</td>
+                    <td>${fmt(c.intensity * 100)}%</td>
+                    <td>${c.area_px}px²</td>
+                </tr>`).join('');
+
+            let evaluation = '';
+            if (data.evaluation) {
+                const e = data.evaluation;
+                evaluation = `
+                    <h4 style="margin-top: 20px;"><i class="fas fa-check-double"></i> Detection vs. ground truth (IoU &gt; ${e.iou_threshold})</h4>
+                    <div style="text-align:center;"><img src="${data.result_image}" alt="Detected cells" class="result-image"></div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-value">${e.predicted_count}/${e.true_count}</div><div class="stat-label">Detected / True</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(e.precision * 100)}%</div><div class="stat-label">Precision</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(e.recall * 100)}%</div><div class="stat-label">Recall</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(e.f1, 3)}</div><div class="stat-label">F1 score</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(e.mean_iou, 2)}</div><div class="stat-label">Mean IoU</div></div>
+                    </div>`;
+            }
+
+            $('syntheticResults').innerHTML = `
+                <div class="result-card">
+                    <h3><i class="fas fa-magic"></i> Generated Synthetic Image</h3>
+                    <div style="text-align: center;">
+                        <a href="${data.image}" download="synthetic_cells.png" title="Click to download image" style="display: inline-block;">
+                            <img src="${data.image}" alt="Synthetic Cell Image" class="result-image download-hover">
+                        </a>
+                    </div>
+                    <div style="text-align:center; font-size:0.9rem; color:#666; margin-bottom:15px;">
+                        <i class="fas fa-download"></i> Click image to download${data.seed !== null ? ` &middot; seed ${data.seed}` : ''}
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-value">${data.cell_count}/${data.requested}</div><div class="stat-label">Cells placed / requested</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(avgIntensity * 100)}%</div><div class="stat-label">Avg peak intensity</div></div>
+                        <div class="stat-item"><div class="stat-value">${Math.round(avgArea)}</div><div class="stat-label">Avg area (px²)</div></div>
+                    </div>
+                    ${evaluation}
+                    <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Ground-truth cell data</h4>
+                    <table class="cell-data-table">
+                        <thead><tr>
+                            <th>Cell ID</th><th>Center (x, y)</th><th>${lengthLabel}</th><th>${widthLabel}</th>
+                            <th>Angle</th><th>Intensity</th><th>Area</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        // ---------- analysis ----------
+        function syncThresholdControls() {
+            $('manualThresholdGroup').style.display = $('thresholdMethod').value === 'fixed' ? 'block' : 'none';
+        }
+
+        function analysisParams() {
+            return {
+                channel: $('channel').value,
+                threshold_method: $('thresholdMethod').value,
+                manual_threshold: parseFloat($('manualThreshold').value),
+                split_method: $('splitMethod').value,
+                min_cell_area: parseInt($('minCellArea').value, 10),
+                max_cell_area: parseInt($('maxCellArea').value, 10),
+                smoothing_sigma: parseFloat($('smoothingSigma').value),
+                exclude_border: $('excludeBorder').checked
+            };
+        }
+
+        async function analyzeImage(file) {
+            showLoading('analysisResults', 'Analyzing your image...');
+            const formData = new FormData();
+            formData.append('file', file);
+            for (const [key, value] of Object.entries(analysisParams())) {
+                formData.append(key, value);
+            }
+            try {
+                const response = await fetch('/api/analyze', { method: 'POST', body: formData });
+                const data = await response.json();
+                data.success ? displayAnalysisResults(data) : showError(data.error, 'analysisResults');
+            } catch (error) {
+                showError('Failed to analyze image: ' + error.message, 'analysisResults');
+            }
+        }
+
+        async function analyzeSampleImage() {
+            showLoading('analysisResults', 'Analyzing sample image...');
+            try {
+                const data = await postJson('/api/analyze', { sample: true, ...analysisParams() });
+                data.success ? displayAnalysisResults(data) : showError(data.error, 'analysisResults');
+            } catch (error) {
+                showError('Failed to analyze sample image: ' + error.message, 'analysisResults');
+            }
+        }
+
+        let lastAnalysis = null;
+
+        function displayAnalysisResults(data) {
+            lastAnalysis = data;
+            const s = data.summary;
+            const rows = data.cells.map(c => `
+                <tr>
+                    <td>${c.cell_id}</td>
+                    <td>(${fmt(c.centroid_x)}, ${fmt(c.centroid_y)})</td>
+                    <td>${c.area_px}</td>
+                    <td>${fmt(c.major_axis_px)} × ${fmt(c.minor_axis_px)}</td>
+                    <td>${fmt(c.circularity, 2)}</td>
+                    <td>${fmt(c.mean_intensity)}</td>
+                    <td>${fmt(c.mean_intensity_corrected)}</td>
+                    <td>${c.brightness}</td>
+                </tr>`).join('');
+
+            $('analysisResults').innerHTML = `
+                <div class="result-card">
+                    <h3><i class="fas fa-search"></i> Analysis Results</h3>
+                    <img src="${data.figure_image}" alt="Original, detected cells and segmentation labels" class="result-image">
+                    <div class="button-row">
+                        <button class="btn info" onclick="download('cells.csv', lastAnalysis.csv, 'text/csv')"><i class="fas fa-file-csv"></i> Cells (CSV)</button>
+                        <button class="btn info" onclick="download('results.json', JSON.stringify(lastAnalysis.report, null, 2), 'application/json')"><i class="fas fa-file-code"></i> Full report (JSON)</button>
+                        <a class="btn info" href="${data.result_image}" download="overlay.png"><i class="fas fa-image"></i> Overlay (PNG)</a>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-value">${s.cell_count}</div><div class="stat-label">Cells detected</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(s.area_px.mean, 0)}</div><div class="stat-label">Mean area (px²)</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(s.mean_intensity.mean)} ± ${fmt(s.mean_intensity.std)}</div><div class="stat-label">Mean intensity ± SD</div></div>
+                        <div class="stat-item"><div class="stat-value">${fmt(s.coverage_fraction * 100)}%</div><div class="stat-label">Area coverage</div></div>
+                        <div class="stat-item"><div class="stat-value">${s.brightness_counts.Low} / ${s.brightness_counts.Medium} / ${s.brightness_counts.High}</div><div class="stat-label">Low / Medium / High</div></div>
+                    </div>
+                    ${data.cells.length > 0 ? `
+                        <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Detected cell data</h4>
+                        <table class="cell-data-table">
+                            <thead><tr>
+                                <th>Cell ID</th><th>Centroid (x, y)</th><th>Area (px²)</th><th>Axes (px)</th>
+                                <th>Circularity</th><th>Mean intensity</th><th>Background-corrected</th><th>Brightness</th>
+                            </tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>` : '<p style="text-align: center; margin-top: 20px; color: #666;">No cells detected in this image.</p>'}
+                </div>`;
+        }
+
+        // ---------- calibration panel ----------
+        function toggleCalibration() {
+            const content = $('calibrationContent');
+            const chevron = $('calibrationChevron');
+            const opening = content.style.display === 'none' || content.style.display === '';
+            content.style.display = opening ? 'block' : 'none';
+            chevron.classList.toggle('fa-chevron-down', !opening);
+            chevron.classList.toggle('fa-chevron-up', opening);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            $('calibrationContent').style.display = 'none';
+            syncThresholdControls();
+        });
+    </script>
+</body>
+
+</html>

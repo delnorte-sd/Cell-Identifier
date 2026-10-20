@@ -449,3 +449,14 @@ input[type="range"]::-moz-range-track {
         gap: 5px;
     }
 }
+.button-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 10px 0 15px;
+}
+
+a.btn {
+    text-decoration: none;
+}

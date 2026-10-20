@@ -1,28 +1,3 @@
-# Core web framework
-Flask==3.0.0
-gunicorn==21.2.0
-
-# Computer vision and image processing
-opencv-python==4.8.1.78
-Pillow==11.0.0
-
-# Scientific computing and array operations (Python 3.12 compatible versions)
-numpy==1.26.2
-scipy>=1.12.0
-
-# Machine learning libraries
-scikit-learn==1.3.2
-
-# Data visualization
-matplotlib==3.8.2
-
-# Optional: For more advanced image formats
-opencv-contrib-python==4.8.1.78
-
-# Optional: For enhanced image processing (if needed later)
-scikit-image==0.22.0
-
-# Development dependencies (optional)
-# pytest==7.4.3
-# black==23.11.0
-# flake8==6.1.0
+# Deployment requirements (used by Render: `pip install -r requirements.txt`).
+# Installs this package with its web extra; versions are declared in pyproject.toml.
+.[web]
