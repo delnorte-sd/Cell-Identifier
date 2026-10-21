@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell-Identifier · DelNorte-SD</title>
+    <meta name="description" content="Detect, segment and measure cells in fluorescence microscopy images.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v={{ version }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<body>
+    <!-- Icon sprite: simple 16px strokes, used only where they aid recognition. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-open" viewBox="0 0 16 16"><path d="M2 4.5V13h12V6H8L6.5 4.5H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+        <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.3-.8.6-.8 1.2v.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+        <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v13" stroke="currentColor" stroke-width="1.4"/></symbol>
+        <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-cells" viewBox="0 0 24 24"><rect x="3.5" y="6" width="11" height="5.5" rx="2.75" transform="rotate(-20 9 8.75)" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="12.5" width="10" height="5" rx="2.5" transform="rotate(15 15 15)" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    </svg>
+
+    <div class="app" id="app" data-mode="analyze" data-state="empty">
+        <header class="appbar">
+            <div class="brand">
+                <svg class="brand-mark" width="22" height="22" aria-hidden="true"><use href="#i-cells"/></svg>
+                <span class="wordmark">Cell-Identifier</span>
+                <span class="brand-sub">DelNorte-SD &middot; iGEM</span>
+            </div>
+            <div class="context" aria-label="Current image">
+                <span class="context-name" id="imageName">No image</span>
+                <span class="context-meta" id="imageMeta"></span>
+            </div>
+            <div class="status" id="status" data-state="idle">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="statusText" role="status" aria-live="polite">Ready</span>
+            </div>
+            <nav class="segmented mode-switch" aria-label="Workspace mode">
+                <button type="button" data-mode="analyze" aria-pressed="true">Analyze</button>
+                <button type="button" data-mode="synthetic" aria-pressed="false">Validate</button>
+            </nav>
+            <button type="button" class="btn" id="openBtn" aria-label="Open image" title="Open image">
+                <svg width="16" height="16" aria-hidden="true"><use href="#i-open"/></svg>
+                <span>Open image</span>
+            </button>
+            <button type="button" class="icon-btn" id="helpBtn" aria-label="Help and keyboard shortcuts" title="Help (?)">
+                <svg width="16" height="16" aria-hidden="true"><use href="#i-help"/></svg>
+            </button>
+            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.tif,.tiff,.bmp,image/png,image/jpeg,image/tiff,image/bmp" hidden>
+        </header>
+
+        <main class="workspace">
+            <!-- ============================ controls ============================ -->
+            <aside class="panel controls" aria-label="Analysis settings">
+                <form id="settings" class="settings" novalidate>
+                    <section class="step step-static" data-only="analyze">
+                        <h2 class="step-title"><span class="step-n">1</span>Input</h2>
+                        <div class="dropzone" id="dropzone">
+                            <p class="dropzone-file" id="inputSummary">No image selected</p>
+                            <div class="row-buttons">
+                                <button type="button" class="btn btn-small" data-action="open">Choose file…</button>
+                                <button type="button" class="btn btn-small btn-quiet" data-action="sample">Use sample</button>
+                            </div>
+                            <p class="hint">PNG, JPEG, TIFF or BMP &middot; 8- or 16-bit &middot; up to 16 MB. You can also drop a file anywhere on the viewer.</p>
+                        </div>
+                    </section>
+
+                    <section class="step step-static" data-only="synthetic">
+                        <h2 class="step-title"><span class="step-n">1</span>Synthetic scene</h2>
+                        <p class="hint">Generates an image with exact ground truth, then scores detection against it.</p>
+                        <div class="field-grid">
+                            <label class="field">
+                                <span class="field-label">Cells</span>
+                                <input type="number" name="num_cells" min="1" max="500" value="60" inputmode="numeric">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Seed</span>
+                                <input type="number" name="seed" min="0" placeholder="random" inputmode="numeric">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span class="field-label">Cell shape</span>
+                            <select name="cell_shape">
+                                <option value="pill" selected>Rods (E. coli-like)</option>
+                                <option value="ellipse">Ellipses</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Detector noise <output data-for="noise_level">0.02</output></span>
+                            <input type="range" name="noise_level" min="0" max="0.1" step="0.005" value="0.02">
+                        </label>
+                        <label class="check">
+                            <input type="checkbox" name="allow_overlap">
+                            <span>Allow overlapping cells (up to 30 %)</span>
+                        </label>
+                    </section>
+
+                    <details class="step" id="sec-pre">
+                        <summary class="step-title"><span class="step-n">2</span>Preprocessing</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Signal channel</span>
+                                <select name="channel">
+                                    <option value="gray" selected>Luminance (all channels)</option>
+                                    <option value="green">Green (GFP)</option>
+                                    <option value="red">Red</option>
+                                    <option value="blue">Blue</option>
+                                    <option value="max">Brightest channel</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Smoothing σ <output data-for="smoothing_sigma" data-unit=" px">1 px</output></span>
+                                <input type="range" name="smoothing_sigma" min="0" max="5" step="0.5" value="1">
+                                <span class="hint">Gaussian denoising before thresholding; 0 turns it off.</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Background correction</span>
+                                <select name="background">
+                                    <option value="none" selected>None</option>
+                                    <option value="tophat">Top-hat (rolling-ball-like)</option>
+                                    <option value="gaussian">Subtract Gaussian blur</option>
+                                </select>
+                            </label>
+                            <label class="field" data-show-if="background!=none">
+                                <span class="field-label">Background radius <output data-for="background_radius" data-unit=" px">25 px</output></span>
+                                <input type="range" name="background_radius" min="5" max="100" step="1" value="25">
+                                <span class="hint">Must be larger than the radius of the biggest cell.</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-det" open>
+                        <summary class="step-title"><span class="step-n">3</span>Detection &amp; segmentation</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Segmentation engine</span>
+                                <select name="engine">
+                                    <option value="learned" selected>Learned · trained U-Net (recommended)</option>
+                                    <option value="classical">Classical · threshold + watershed</option>
+                                </select>
+                                <span class="hint" data-show-if="engine=learned">A neural network trained on expert-annotated fluorescence images of bacteria. Most accurate on real micrographs.</span>
+                            </label>
+                            <label class="field" data-show-if="engine=learned">
+                                <span class="field-label">Typical cell width (px)</span>
+                                <input type="number" name="cell_width_px" min="0" max="200" step="0.5" placeholder="auto-detect" inputmode="decimal">
+                                <span class="hint">Leave empty to detect it automatically. Set it if cells are unusually small or large.</span>
+                            </label>
+                            <div class="field-group" data-show-if="engine=classical">
+                                <label class="field">
+                                    <span class="field-label">Threshold</span>
+                                    <select name="threshold_method">
+                                        <option value="otsu" selected>Automatic · Otsu</option>
+                                        <option value="triangle">Automatic · Triangle (sparse, dim cells)</option>
+                                        <option value="adaptive">Adaptive (uneven illumination)</option>
+                                        <option value="fixed">Manual level</option>
+                                    </select>
+                                </label>
+                                <label class="field" data-show-if="threshold_method=fixed">
+                                    <span class="field-label">Manual level <output data-for="manual_threshold" data-unit=" / 255">50 / 255</output></span>
+                                    <input type="range" name="manual_threshold" min="1" max="254" step="1" value="50">
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Noise floor <output data-for="min_snr" data-unit=" σ">3 σ</output></span>
+                                    <input type="range" name="min_snr" min="0" max="8" step="0.5" value="3">
+                                    <span class="hint">Signal must exceed background by this many noise standard deviations. 0 disables.</span>
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Separate touching cells</span>
+                                    <select name="split_method">
+                                        <option value="intensity" selected>By intensity valleys (packed rods)</option>
+                                        <option value="distance">By shape necks (round, even cells)</option>
+                                        <option value="none">Don't split</option>
+                                    </select>
+                                </label>
+                                <label class="field" data-show-if="split_method=intensity">
+                                    <span class="field-label">Valley depth <output data-for="intensity_h">0.05</output></span>
+                                    <input type="range" name="intensity_h" min="0.01" max="0.2" step="0.01" value="0.05">
+                                    <span class="hint">Higher merges more, lower splits more (fraction of full scale).</span>
+                                </label>
+                                <label class="field" data-show-if="split_method=distance">
+                                    <span class="field-label">Neck depth <output data-for="watershed_h" data-unit=" px">1 px</output></span>
+                                    <input type="range" name="watershed_h" min="0.5" max="5" step="0.5" value="1">
+                                </label>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-filter">
+                        <summary class="step-title"><span class="step-n">4</span>Filtering &amp; units</summary>
+                        <div class="step-body">
+                            <div class="field-grid">
+                                <label class="field">
+                                    <span class="field-label">Min area (px²)</span>
+                                    <input type="number" name="min_cell_area" min="1" value="15" inputmode="numeric">
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Max area (px²)</span>
+                                    <input type="number" name="max_cell_area" min="1" value="5000" inputmode="numeric">
+                                </label>
+                            </div>
+                            <label class="check">
+                                <input type="checkbox" name="exclude_border">
+                                <span>Exclude cells touching the image edge</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Pixel size (µm)</span>
+                                <input type="number" name="pixel_size_um" min="0" step="0.001" placeholder="unset — results in px" inputmode="decimal">
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-class">
+                        <summary class="step-title"><span class="step-n">5</span>Brightness classes</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Method</span>
+                                <select name="classification">
+                                    <option value="absolute" selected>Absolute cut-offs (comparable across images)</option>
+                                    <option value="quantile">Tertiles of this image</option>
+                                    <option value="none">Off</option>
+                                </select>
+                            </label>
+                            <p class="hint">Default cut-offs (126 and 147 of 255) were calibrated on the bundled sample. Recalibrate them for your own microscope in a config file.</p>
+                        </div>
+                    </details>
+                </form>
+
+                <div class="run-bar">
+                    <button type="button" class="btn btn-primary btn-block" id="runBtn" disabled>
+                        <span id="runLabel">Run analysis</span>
+                        <kbd>Ctrl ↵</kbd>
+                    </button>
+                    <button type="button" class="link-btn" id="resetBtn">Restore defaults</button>
+                </div>
+            </aside>
+
+            <!-- ============================= viewer ============================= -->
+            <section class="viewer" aria-label="Image viewer">
+                <div class="toolbar" role="toolbar" aria-label="View controls">
+                    <div class="segmented" role="group" aria-label="Base image">
+                        <button type="button" data-base="original" aria-pressed="true" title="Show the original image">Original</button>
+                        <button type="button" data-base="processed" aria-pressed="false" title="Show the image segmentation operated on (display-stretched)">Processed</button>
+                    </div>
+                    <span class="tb-sep" aria-hidden="true"></span>
+                    <div class="layer-toggles" role="group" aria-label="Overlay layers">
+                        <label class="chip" title="Outlines coloured by brightness class (O)"><input type="checkbox" data-layer="outlines" checked><span>Outlines</span></label>
+                        <label class="chip" title="Filled segmentation labels (M)"><input type="checkbox" data-layer="mask"><span>Mask</span></label>
+                        <label class="chip" title="Cell ID numbers (I)"><input type="checkbox" data-layer="ids"><span>IDs</span></label>
+                        <label class="chip" data-only="synthetic" title="Ground-truth outlines (T)"><input type="checkbox" data-layer="truth"><span>Truth</span></label>
+                    </div>
+                    <label class="opacity" title="Overlay opacity">
+                        <span>Opacity</span>
+                        <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.9" aria-label="Overlay opacity">
+                    </label>
+                    <span class="tb-sep" aria-hidden="true"></span>
+                    <button type="button" class="tool-btn" id="compareBtn" aria-pressed="false" title="Split comparison: original vs. annotated (C)">
+                        <svg width="16" height="16" aria-hidden="true"><use href="#i-compare"/></svg><span>Compare</span>
+                    </button>
+                </div>
+
+                <div class="stage" id="stage">
+                    <div class="zoom zoom-dock" role="group" aria-label="Zoom" id="zoomDock" hidden>
+                        <button type="button" class="icon-btn" data-zoom="out" aria-label="Zoom out" title="Zoom out (−)"><svg width="16" height="16" aria-hidden="true"><use href="#i-minus"/></svg></button>
+                        <span class="zoom-readout" id="zoomReadout" aria-live="off">–</span>
+                        <button type="button" class="icon-btn" data-zoom="in" aria-label="Zoom in" title="Zoom in (+)"><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                        <button type="button" class="icon-btn" data-zoom="fit" aria-label="Fit image to view" title="Fit to view (F)"><svg width="16" height="16" aria-hidden="true"><use href="#i-fit"/></svg></button>
+                        <button type="button" class="tool-btn" data-zoom="one" title="Actual pixels, 100 % (1)">1:1</button>
+                    </div>
+                    <canvas id="canvas" aria-label="Microscopy image with detection overlays" role="img"></canvas>
+                    <div class="split" id="split" hidden>
+                        <span class="split-label split-left">Original</span>
+                        <span class="split-label split-right">Annotated</span>
+                        <button type="button" class="split-handle" id="splitHandle" aria-label="Drag to move the comparison divider"></button>
+                    </div>
+                    <div class="empty" id="emptyState">
+                        <svg width="40" height="40" aria-hidden="true"><use href="#i-cells"/></svg>
+                        <h2>Open a fluorescence micrograph</h2>
+                        <p>Drop an image here, choose a file, or start with the bundled <i>E. coli</i> GFP sample. It is analysed straight away with sensible defaults, and every setting can be adjusted afterwards.</p>
+                        <div class="row-buttons">
+                            <button type="button" class="btn btn-primary" data-action="open">Open image…</button>
+                            <button type="button" class="btn btn-on-dark" data-action="sample">Use sample image</button>
+                        </div>
+                    </div>
+                    <div class="empty" id="emptySynthetic" hidden>
+                        <svg width="40" height="40" aria-hidden="true"><use href="#i-cells"/></svg>
+                        <h2>Validate the pipeline on known ground truth</h2>
+                        <p>Generate a synthetic image, then compare detected cells with the true ones. Precision, recall and F1 appear on the right.</p>
+                        <div class="row-buttons">
+                            <button type="button" class="btn btn-primary" data-action="run">Generate &amp; analyze</button>
+                        </div>
+                    </div>
+                    <div class="busy" id="busy" hidden>
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span id="busyText">Analysing…</span>
+                    </div>
+                    <div class="drop-hint" id="dropHint" hidden>Drop to open</div>
+                    <div class="viewer-error" id="viewerError" role="alert" hidden>
+                        <strong>Analysis failed.</strong> <span id="viewerErrorText"></span>
+                        <button type="button" class="link-btn" id="dismissError">Dismiss</button>
+                    </div>
+                </div>
+
+                <footer class="statusbar" aria-label="Image information">
+                    <span id="sbDims">No image loaded</span>
+                    <span id="sbZoom"></span>
+                    <span id="sbPos"></span>
+                    <span id="sbValue"></span>
+                    <span id="sbCell"></span>
+                    <span class="sb-hint">Scroll to zoom &middot; drag to pan</span>
+                </footer>
+            </section>
+
+            <!-- ============================= results ============================ -->
+            <aside class="panel results" aria-label="Results">
+                <div class="results-empty" id="resultsEmpty">
+                    <h2 class="panel-title">Results</h2>
+                    <p class="hint">Measurements appear here after an analysis: counts, size and intensity statistics, every cell, and exports.</p>
+                </div>
+
+                <div class="results-body" id="resultsBody" hidden>
+                    <section class="block" id="evalBlock" hidden>
+                        <h2 class="panel-title">Detection vs. ground truth</h2>
+                        <dl class="metrics metrics-3" id="evalMetrics"></dl>
+                        <p class="hint" id="evalNote"></p>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Summary <span class="stale-tag" id="staleTag" hidden>settings changed</span></h2>
+                        <dl class="metrics" id="summaryMetrics"></dl>
+                    </section>
+
+                    <section class="block" id="classBlock">
+                        <h2 class="panel-title">Brightness classes</h2>
+                        <ul class="classes" id="classList"></ul>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Area distribution</h2>
+                        <div class="histogram" id="histogram"></div>
+                    </section>
+
+                    <section class="block" id="cellDetail" hidden>
+                        <h2 class="panel-title">Cell <span id="cellDetailId"></span> <button type="button" class="link-btn" id="zoomToCell">Zoom to cell</button></h2>
+                        <dl class="kv" id="cellDetailList"></dl>
+                    </section>
+
+                    <section class="block block-table">
+                        <h2 class="panel-title">Cells <span class="count" id="cellCount"></span></h2>
+                        <div class="table-wrap">
+                            <table class="cells" id="cellTable">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" data-key="cell_id" aria-sort="ascending"><button type="button">ID</button></th>
+                                        <th scope="col" data-key="area_px"><button type="button">Area</button></th>
+                                        <th scope="col" data-key="circularity"><button type="button">Circ.</button></th>
+                                        <th scope="col" data-key="mean_intensity"><button type="button">Mean I</button></th>
+                                        <th scope="col" data-key="brightness"><button type="button">Class</button></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Export</h2>
+                        <div class="exports">
+                            <button type="button" class="btn btn-small" data-export="csv"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Cells CSV</button>
+                            <button type="button" class="btn btn-small" data-export="json"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Report JSON</button>
+                            <button type="button" class="btn btn-small" data-export="overlay"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Overlay PNG</button>
+                            <button type="button" class="btn btn-small" data-export="figure"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Figure PNG</button>
+                        </div>
+                        <p class="hint">The JSON report records the software version, the input's SHA-256 and every setting used.</p>
+                    </section>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <dialog class="help" id="helpDialog" aria-labelledby="helpTitle">
+        <form method="dialog" class="help-inner">
+            <header class="help-head">
+                <h2 id="helpTitle">Using Cell-Identifier <span class="version">v{{ version }}</span></h2>
+                <button class="icon-btn" value="close" aria-label="Close help">✕</button>
+            </header>
+            <div class="help-cols">
+                <section>
+                    <h3>Workflow</h3>
+                    <ol>
+                        <li><b>Open</b> an image (or the sample). It is analysed with the defaults.</li>
+                        <li><b>Inspect</b>: zoom, pan, toggle layers and compare with the original.</li>
+                        <li><b>Adjust</b> settings on the left, then <b>Run analysis</b>.</li>
+                        <li><b>Export</b> the cell table, full report or figures.</li>
+                    </ol>
+                    <h3>Layers</h3>
+                    <dl class="kv">
+                        <dt>Original</dt><dd>Your image, unmodified.</dd>
+                        <dt>Processed</dt><dd>What segmentation saw: channel, smoothing and background correction applied, linearly stretched for display. Measurements always use the original intensities.</dd>
+                        <dt>Outlines</dt><dd>Cell boundaries, coloured by brightness class (<span class="sw sw-low"></span>Low, <span class="sw sw-med"></span>Medium, <span class="sw sw-high"></span>High). Okabe–Ito colours are distinguishable with colour-vision deficiency.</dd>
+                        <dt>Mask</dt><dd>Each segmented cell filled with its own colour.</dd>
+                        <dt>Ground truth</dt><dd>Validate mode only: the true cell outlines, in purple.</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h3>Keyboard</h3>
+                    <dl class="keys">
+                        <dt><kbd>Ctrl</kbd> <kbd>↵</kbd></dt><dd>Run analysis</dd>
+                        <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom in / out</dd>
+                        <dt><kbd>F</kbd></dt><dd>Fit to view</dd>
+                        <dt><kbd>1</kbd></dt><dd>Actual pixels (100 %)</dd>
+                        <dt><kbd>C</kbd></dt><dd>Toggle comparison</dd>
+                        <dt><kbd>O</kbd> <kbd>M</kbd> <kbd>I</kbd> <kbd>T</kbd></dt><dd>Outlines, mask, IDs, ground truth</dd>
+                        <dt><kbd>P</kbd></dt><dd>Original / processed</dd>
+                        <dt><kbd>Esc</kbd></dt><dd>Clear selection</dd>
+                    </dl>
+                    <h3>Method</h3>
+                    <p>Otsu (or chosen) threshold held above a robust noise floor, then a marker-controlled watershed splits touching cells. Shape and intensity are measured per cell on the raw signal. Full details: <a href="https://github.com/delnorte-sd/Cell-Identifier/blob/main/docs/METHODS.md" target="_blank" rel="noopener">docs/METHODS.md</a>.</p>
+                </section>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="{{ url_for('static', filename='app.js') }}?v={{ version }}" defer></script>
+</body>
+
+</html>

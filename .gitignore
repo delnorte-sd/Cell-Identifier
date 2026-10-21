@@ -1,1 +1,27 @@
+# Virtual environments
 venv/
+.venv/
+
+# Python build / cache artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tool caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Default CLI output folders and legacy upload folder
+results/
+synthetic/
+uploads/
+
+# Downloaded training data and trained-model work dirs (large; see docs/TRAINING.md)
+datasets/
+runs/

@@ -4,7 +4,14 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    # One worker and one thread keep a single analysis in memory at a time (peak
+    # ~300 MB for a 2 MP image, within the 512 MB free tier); further requests queue.
+    # A generous timeout tolerates the slow free-tier CPU.
+    startCommand: gunicorn app:app --workers 1 --threads 1 --timeout 180
     envVars:
+      # The free plan has ~0.1 CPU: cap web uploads at 2 MP so analyses finish within
+      # the timeout. On a paid plan (>= 0.5 CPU) raise this, e.g. to 4194304 (2048x2048).
+      - key: CELL_IDENTIFIER_MAX_PIXELS
+        value: "2000000"
       - key: PYTHON_VERSION
         value: 3.11.9

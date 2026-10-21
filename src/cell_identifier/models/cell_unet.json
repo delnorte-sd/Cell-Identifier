@@ -1,0 +1,170 @@
+{
+ "name": "cell_unet",
+ "architecture": "U-Net, 4 levels, base width 16, 3 sigmoid outputs",
+ "outputs": [
+  "foreground",
+  "boundary",
+  "normalised_distance"
+ ],
+ "target_cell_width": 10.0,
+ "post_processing": {
+  "prob_threshold": 0.35,
+  "seed_threshold": 0.5,
+  "min_confidence": 0.7
+ },
+ "training": {
+  "iterations": 12000,
+  "batch_size": 16,
+  "best_validation": {
+   "step": 12000,
+   "loss": 1.0168395978212357,
+   "ap50": 0.7243562337087611,
+   "ap75": 0.5624878161476707,
+   "minutes": 23.216032842795055
+  },
+  "synthetic_images": 0
+ },
+ "test_scores": {
+  "classical": {
+   "A22": {
+    "n": 2,
+    "ap50": 0.5525,
+    "ap75": 0.2958,
+    "ap90": 0.0459,
+    "f1": 0.711
+   },
+   "bthai": {
+    "n": 6,
+    "ap50": 0.2207,
+    "ap75": 0.0957,
+    "ap90": 0.0077,
+    "f1": 0.3502
+   },
+   "cex": {
+    "n": 2,
+    "ap50": 0.1138,
+    "ap75": 0.0415,
+    "ap90": 0.0018,
+    "f1": 0.1994
+   },
+   "vibrio": {
+    "n": 7,
+    "ap50": 0.5544,
+    "ap75": 0.358,
+    "ap90": 0.0161,
+    "f1": 0.7104
+   },
+   "wiggins": {
+    "n": 58,
+    "ap50": 0.3399,
+    "ap75": 0.1644,
+    "ap90": 0.0049,
+    "f1": 0.4966
+   },
+   "ALL": {
+    "n": 75,
+    "ap50": 0.35,
+    "ap75": 0.1772,
+    "ap90": 0.0071,
+    "f1": 0.5026
+   }
+  },
+  "learned (auto width)": {
+   "A22": {
+    "n": 2,
+    "ap50": 0.8961,
+    "ap75": 0.8362,
+    "ap90": 0.0715,
+    "f1": 0.9421
+   },
+   "bthai": {
+    "n": 6,
+    "ap50": 0.7289,
+    "ap75": 0.6089,
+    "ap90": 0.0997,
+    "f1": 0.8404
+   },
+   "cex": {
+    "n": 2,
+    "ap50": 0.5361,
+    "ap75": 0.4297,
+    "ap90": 0.0743,
+    "f1": 0.6478
+   },
+   "vibrio": {
+    "n": 7,
+    "ap50": 0.9046,
+    "ap75": 0.7804,
+    "ap90": 0.0271,
+    "f1": 0.9492
+   },
+   "wiggins": {
+    "n": 58,
+    "ap50": 0.8927,
+    "ap75": 0.7427,
+    "ap90": 0.0813,
+    "f1": 0.9424
+   },
+   "ALL": {
+    "n": 75,
+    "ap50": 0.8713,
+    "ap75": 0.7297,
+    "ap90": 0.0773,
+    "f1": 0.927
+   }
+  },
+  "learned (true width)": {
+   "A22": {
+    "n": 2,
+    "ap50": 0.8674,
+    "ap75": 0.8024,
+    "ap90": 0.0967,
+    "f1": 0.9283
+   },
+   "bthai": {
+    "n": 6,
+    "ap50": 0.7019,
+    "ap75": 0.6066,
+    "ap90": 0.1062,
+    "f1": 0.8207
+   },
+   "cex": {
+    "n": 2,
+    "ap50": 0.2363,
+    "ap75": 0.1194,
+    "ap90": 0.0056,
+    "f1": 0.3658
+   },
+   "vibrio": {
+    "n": 7,
+    "ap50": 0.8607,
+    "ap75": 0.7421,
+    "ap90": 0.0303,
+    "f1": 0.9149
+   },
+   "wiggins": {
+    "n": 58,
+    "ap50": 0.8964,
+    "ap75": 0.748,
+    "ap90": 0.0782,
+    "f1": 0.9445
+   },
+   "ALL": {
+    "n": 75,
+    "ap50": 0.8591,
+    "ap75": 0.7208,
+    "ap90": 0.0745,
+    "f1": 0.916
+   }
+  }
+ },
+ "data": {
+  "name": "Omnipose bact_fluor (fluorescence bacteria, expert instance masks)",
+  "url": "https://osf.io/xmury/",
+  "license": "CC BY-NC 3.0",
+  "citation": "Cutler, K. J. et al. Omnipose: a high-precision morphology-independent solution for bacterial cell segmentation. Nature Methods 19, 1438-1448 (2022).",
+  "split": "122 train / 21 validation / 75 test images (test never used for tuning)"
+ },
+ "sha256": "59a3aab08b0fa2e6cc46608809209342c4ef575b13bf17759880e8059804bb55",
+ "bundled_at": "2026-10-21T02:41:57+00:00"
+}

@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cell-identifier"
+version = "1.1.0"
+description = "Reproducible detection, segmentation and measurement of cells in fluorescence microscopy images, with a ground-truth synthetic image generator."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "CC-BY-NC-SA-4.0" }
+authors = [{ name = "iGEM Team DelNorte-SD" }]
+keywords = ["microscopy", "cell counting", "segmentation", "image analysis", "iGEM"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "opencv-python-headless>=4.8",
+    "scikit-image>=0.21",
+]
+
+[project.optional-dependencies]
+web = ["Flask>=3.0", "gunicorn>=21.2"]
+plot = ["matplotlib>=3.7"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.5",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+cell-identifier = "cell_identifier.cli:main"
+
+[project.urls]
+Repository = "https://github.com/delnorte-sd/Cell-Identifier"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cell_identifier = ["py.typed", "web/templates/*.html", "web/static/*", "models/*.onnx", "models/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:cell_identifier.*",
+    # scikit-image <= 0.26 sets ndarray.shape internally, deprecated in NumPy 2.5
+    "ignore:Setting the shape on a NumPy array:DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["cell_identifier"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "NPY", "RUF", "C4", "PT"]
+ignore = [
+    "N803", "N806",  # allow conventional math names such as `H`, `W`
+    "RUF001", "RUF002", "RUF003",  # Greek letters / × are intentional in scientific text
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802"]
+"training/*" = ["N812"]  # `import torch.nn.functional as F` is the PyTorch convention
+
+[tool.ruff.lint.isort]
+known-first-party = ["cell_identifier", "model", "train"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["cell_identifier"]
+mypy_path = "src"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*", "scipy", "scipy.*", "skimage", "skimage.*", "matplotlib", "matplotlib.*", "flask", "flask.*"]
+ignore_missing_imports = true
