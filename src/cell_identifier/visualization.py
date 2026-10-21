@@ -25,9 +25,13 @@ __all__ = [
     "BRIGHTNESS_COLORS",
     "OKABE_ITO",
     "comparison_panel",
+    "encode_label_ids",
+    "render_label_layer",
     "render_labels",
     "render_mask",
+    "render_outline_layer",
     "render_overlay",
+    "render_processed",
     "result_figure",
     "to_rgb",
 ]
@@ -125,6 +129,65 @@ def render_labels(labels: np.ndarray) -> np.ndarray:
     palette = np.array([(0, 0, 0), *_LABEL_CYCLE], dtype=np.uint8)
     index = np.where(labels > 0, (labels - 1) % len(_LABEL_CYCLE) + 1, 0)
     return palette[index]
+
+
+def render_outline_layer(
+    labels: np.ndarray,
+    cells: Sequence[CellMeasurement],
+    *,
+    color: tuple[int, int, int] | None = None,
+) -> np.ndarray:
+    """Transparent RGBA layer containing only the cell outlines.
+
+    Outline pixels are opaque and coloured by brightness class (or ``color`` when
+    given, e.g. for ground truth); every other pixel is fully transparent, so the
+    layer can be composited over any base image at any opacity.
+    """
+    layer = np.zeros((*labels.shape, 4), dtype=np.uint8)
+    if not cells and color is None:
+        return layer
+    boundaries = find_boundaries(labels, connectivity=1, mode="inner")
+    if color is not None:
+        layer[boundaries, :3] = color
+    else:
+        lut = np.zeros((int(labels.max()) + 1, 3), dtype=np.uint8)
+        for cell in cells:
+            lut[cell.cell_id] = BRIGHTNESS_COLORS.get(
+                cell.brightness, BRIGHTNESS_COLORS["Unclassified"]
+            )
+        layer[boundaries, :3] = lut[labels[boundaries]]
+    layer[boundaries, 3] = 255
+    return layer
+
+
+def render_label_layer(labels: np.ndarray) -> np.ndarray:
+    """Transparent RGBA layer: each cell filled with a palette colour, background clear."""
+    layer = np.zeros((*labels.shape, 4), dtype=np.uint8)
+    layer[..., :3] = render_labels(labels)
+    layer[labels > 0, 3] = 255
+    return layer
+
+
+def encode_label_ids(labels: np.ndarray) -> np.ndarray:
+    """Pack label IDs into 24-bit RGB (R = low byte) so a browser can read exact IDs.
+
+    Supports up to 16 777 215 labels; decode with ``r + 256 * g + 65536 * b``.
+    """
+    ids = labels.astype(np.uint32)
+    if ids.size and int(np.max(ids)) > 0xFFFFFF:
+        raise ValueError("too many labels to encode in 24 bits")
+    return np.stack([ids & 0xFF, (ids >> 8) & 0xFF, (ids >> 16) & 0xFF], axis=-1).astype(np.uint8)
+
+
+def render_processed(processed: np.ndarray) -> np.ndarray:
+    """8-bit greyscale view of the segmentation image, linearly stretched min → max.
+
+    This is a display stretch only; measurements never use this image.
+    """
+    lo, hi = float(np.min(processed)), float(np.max(processed))
+    if hi <= lo:
+        return np.zeros(processed.shape, dtype=np.uint8)
+    return np.rint((processed - lo) / (hi - lo) * 255).astype(np.uint8)
 
 
 def render_mask(mask: np.ndarray) -> np.ndarray:

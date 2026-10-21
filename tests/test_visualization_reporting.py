@@ -22,9 +22,13 @@ from cell_identifier.visualization import (
     BRIGHTNESS_COLORS,
     OKABE_ITO,
     comparison_panel,
+    encode_label_ids,
+    render_label_layer,
     render_labels,
     render_mask,
+    render_outline_layer,
     render_overlay,
+    render_processed,
     result_figure,
     to_rgb,
 )
@@ -164,3 +168,37 @@ def test_summary_figure(result, tmp_path: Path) -> None:
     path = save_summary_figure(result, tmp_path / "dist.png", dpi=60)
     assert path.is_file()
     assert path.stat().st_size > 1000
+
+
+def test_viewer_layers(result) -> None:
+    outlines = render_outline_layer(result.labels, result.cells)
+    assert outlines.shape == (*result.labels.shape, 4)
+    opaque = outlines[..., 3] > 0
+    assert opaque.any()
+    assert not opaque[result.labels == 0].any()
+    colours = {tuple(int(v) for v in px) for px in outlines[opaque][:, :3]}
+    assert colours <= set(BRIGHTNESS_COLORS.values())
+    truth = render_outline_layer(result.labels, [], color=OKABE_ITO["reddish_purple"])
+    assert {tuple(int(v) for v in px) for px in truth[truth[..., 3] > 0][:, :3]} == {
+        OKABE_ITO["reddish_purple"]
+    }
+    filled = render_label_layer(result.labels)
+    np.testing.assert_array_equal(filled[..., 3] > 0, result.labels > 0)
+    empty = render_outline_layer(np.zeros((8, 8), dtype=np.int32), [])
+    assert not empty.any()
+
+
+def test_label_id_encoding_round_trips() -> None:
+    labels = np.array([[0, 1, 255], [256, 65535, 70000]], dtype=np.int32)
+    rgb = encode_label_ids(labels).astype(np.int64)
+    np.testing.assert_array_equal(rgb[..., 0] + 256 * rgb[..., 1] + 65536 * rgb[..., 2], labels)
+    with pytest.raises(ValueError, match="24 bits"):
+        encode_label_ids(np.array([[2**24]], dtype=np.int64))
+
+
+def test_render_processed_stretch() -> None:
+    img = np.array([[0.1, 0.2], [0.3, 0.5]], dtype=np.float32)
+    out = render_processed(img)
+    assert out.dtype == np.uint8
+    assert (out.min(), out.max()) == (0, 255)
+    assert not render_processed(np.full((4, 4), 0.3, dtype=np.float32)).any()

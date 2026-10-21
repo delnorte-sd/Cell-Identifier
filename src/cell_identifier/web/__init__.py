@@ -31,7 +31,16 @@ from ..image_io import ImageValidationError, encode_png
 from ..pipeline import AnalysisResult, analyze
 from ..reporting import CELL_COLUMNS, result_to_dict
 from ..synthetic import generate
-from ..visualization import render_overlay, result_figure
+from ..visualization import (
+    OKABE_ITO,
+    encode_label_ids,
+    render_label_layer,
+    render_outline_layer,
+    render_overlay,
+    render_processed,
+    result_figure,
+    to_rgb,
+)
 
 __all__ = ["create_app"]
 
@@ -72,7 +81,9 @@ def analysis_config_from_params(params: Mapping[str, Any]) -> AnalysisConfig:
     Accepted keys (all optional): ``threshold_method``, ``manual_threshold``
     (0-255 scale), ``min_cell_area``, ``max_cell_area``, ``smoothing_sigma``
     (0 disables smoothing), ``split_method``, ``exclude_border``, ``channel``,
-    ``classification``. The legacy keys ``intensity_threshold`` and
+    ``classification``, ``background``, ``background_radius``, ``min_snr``,
+    ``intensity_h``, ``watershed_h`` and ``pixel_size_um`` (empty or 0 = unset).
+    The legacy keys ``intensity_threshold`` and
     ``blur_kernel`` of the original interface are still understood.
     """
     data: dict[str, dict[str, Any]] = {
@@ -111,7 +122,20 @@ def analysis_config_from_params(params: Mapping[str, Any]) -> AnalysisConfig:
         data["filter"]["exclude_border"] = border
     if (classification := _get(params, "classification", str)) is not None:
         data["classification"]["method"] = classification
-    return AnalysisConfig.from_dict(data)
+    if (background := _get(params, "background", str)) is not None:
+        data["preprocess"]["background"] = background
+    if (radius := _get(params, "background_radius", float)) is not None:
+        data["preprocess"]["background_radius"] = radius
+    if (min_snr := _get(params, "min_snr", float)) is not None:
+        data["segmentation"]["min_snr"] = min_snr
+    if (intensity_h := _get(params, "intensity_h", float)) is not None:
+        data["segmentation"]["intensity_h"] = intensity_h
+    if (watershed_h := _get(params, "watershed_h", float)) is not None:
+        data["segmentation"]["watershed_h"] = watershed_h
+    top: dict[str, Any] = dict(data)
+    if (pixel_size := _get(params, "pixel_size_um", float)) is not None and pixel_size > 0:
+        top["pixel_size_um"] = pixel_size
+    return AnalysisConfig.from_dict(top)
 
 
 def _cells_csv(result: AnalysisResult) -> str:
@@ -124,9 +148,30 @@ def _cells_csv(result: AnalysisResult) -> str:
 
 
 def _analysis_payload(result: AnalysisResult) -> dict[str, Any]:
+    """JSON payload for the web viewer.
+
+    ``layers`` holds separately composited PNGs: the original image, the processed
+    (segmentation) image, a transparent label mask, transparent outlines, and the
+    label IDs packed into 24-bit RGB for exact hover picking in the browser.
+    """
     report = result_to_dict(result)
+    meta = result.metadata
     return {
         "success": True,
+        "image_info": {
+            "name": meta.source,
+            "width": meta.width,
+            "height": meta.height,
+            "channels": meta.channels,
+            "dtype": meta.dtype,
+        },
+        "layers": {
+            "original": _data_url(to_rgb(result.image)),
+            "processed": _data_url(render_processed(result.processed)),
+            "mask": _data_url(render_label_layer(result.labels)),
+            "outlines": _data_url(render_outline_layer(result.labels, result.cells)),
+            "ids": _data_url(encode_label_ids(result.labels)),
+        },
         "result_image": _data_url(render_overlay(result.image, result.labels, result.cells)),
         "figure_image": _data_url(result_figure(result)),
         "cell_count": result.cell_count,
@@ -228,10 +273,15 @@ def create_app(config: Mapping[str, Any] | None = None) -> Flask:
             "seed": synthetic.config.seed,
         }
         if _get(params, "evaluate", bool, False):
-            result = analyze(synthetic.image, AnalysisConfig(), name="synthetic")
+            name = f"synthetic_seed{synthetic.config.seed}.png"
+            if synthetic.config.seed is None:
+                name = "synthetic.png"
+            result = analyze(synthetic.image, analysis_config_from_params(params), name=name)
+            payload.update(_analysis_payload(result))
+            payload["cell_count"] = synthetic.cell_count
             payload["evaluation"] = match_labels(result.labels, synthetic.labels).to_dict()
-            payload["result_image"] = _data_url(
-                render_overlay(result.image, result.labels, result.cells)
+            payload["layers"]["truth"] = _data_url(
+                render_outline_layer(synthetic.labels, [], color=OKABE_ITO["reddish_purple"])
             )
         return jsonify(payload)
 

@@ -229,13 +229,15 @@ def to_display_uint8(image: np.ndarray) -> np.ndarray:
 
 
 def _to_bgr(image: np.ndarray) -> np.ndarray:
+    if image.ndim == 3 and image.shape[2] == 4:
+        return cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA)
     if image.ndim == 3:
         return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
 
 
 def encode_png(image: np.ndarray) -> bytes:
-    """Encode an RGB / greyscale ``uint8`` or ``uint16`` array as PNG bytes."""
+    """Encode an RGB(A) / greyscale ``uint8`` or ``uint16`` array as PNG bytes."""
     if image.dtype not in (np.uint8, np.uint16):
         image = to_display_uint8(image)
     ok, buffer = cv2.imencode(".png", _to_bgr(image))
