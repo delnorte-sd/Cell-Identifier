@@ -4,423 +4,411 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cell Image Analysis by iGEM Team DelNorte-SD</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Cell-Identifier · DelNorte-SD</title>
+    <meta name="description" content="Detect, segment and measure cells in fluorescence microscopy images.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}?v={{ version }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-microscope"></i> Cell Image Analysis</h1>
-            <p>By iGEM Team <b>DelNorte-SD</b> &middot; v{{ version }}</p>
-        </div>
+    <!-- Icon sprite: simple 16px strokes, used only where they aid recognition. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-open" viewBox="0 0 16 16"><path d="M2 4.5V13h12V6H8L6.5 4.5H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+        <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.3-.8.6-.8 1.2v.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+        <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v13" stroke="currentColor" stroke-width="1.4"/></symbol>
+        <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-cells" viewBox="0 0 24 24"><rect x="3.5" y="6" width="11" height="5.5" rx="2.75" transform="rotate(-20 9 8.75)" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="12.5" width="10" height="5" rx="2.5" transform="rotate(15 15 15)" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    </svg>
 
-        <div class="tabs">
-            <button class="tab-button active" data-tab="synthetic">
-                <i class="fas fa-magic"></i> Generate Synthetic Cells
+    <div class="app" id="app" data-mode="analyze" data-state="empty">
+        <header class="appbar">
+            <div class="brand">
+                <svg class="brand-mark" width="22" height="22" aria-hidden="true"><use href="#i-cells"/></svg>
+                <span class="wordmark">Cell-Identifier</span>
+                <span class="brand-sub">DelNorte-SD &middot; iGEM</span>
+            </div>
+            <div class="context" aria-label="Current image">
+                <span class="context-name" id="imageName">No image</span>
+                <span class="context-meta" id="imageMeta"></span>
+            </div>
+            <div class="status" id="status" data-state="idle">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="statusText" role="status" aria-live="polite">Ready</span>
+            </div>
+            <nav class="segmented mode-switch" aria-label="Workspace mode">
+                <button type="button" data-mode="analyze" aria-pressed="true">Analyze</button>
+                <button type="button" data-mode="synthetic" aria-pressed="false">Validate</button>
+            </nav>
+            <button type="button" class="btn" id="openBtn" aria-label="Open image" title="Open image">
+                <svg width="16" height="16" aria-hidden="true"><use href="#i-open"/></svg>
+                <span>Open image</span>
             </button>
-            <button class="tab-button" data-tab="analyze">
-                <i class="fas fa-search"></i> Analyze Real Images
+            <button type="button" class="icon-btn" id="helpBtn" aria-label="Help and keyboard shortcuts" title="Help (?)">
+                <svg width="16" height="16" aria-hidden="true"><use href="#i-help"/></svg>
             </button>
-        </div>
+            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.tif,.tiff,.bmp,image/png,image/jpeg,image/tiff,image/bmp" hidden>
+        </header>
 
-        <!-- Synthetic Image Generation Tab -->
-        <div id="synthetic" class="tab-content active">
-            <div class="control-panel">
-                <h3><i class="fas fa-magic"></i> Synthetic Cell Generator</h3>
-                <br>
-                <div class="control-group">
-                    <div class="form-group">
-                        <label for="numCells">Number of Cells (1-500):</label>
-                        <input type="number" id="numCells" min="1" max="500" value="60">
-                    </div>
-                    <div class="form-group">
-                        <label for="noiseLevel">Detector Noise:</label>
-                        <select id="noiseLevel">
-                            <option value="0.01">Low (Clean)</option>
-                            <option value="0.02" selected>Medium (Realistic)</option>
-                            <option value="0.05">High (Noisy)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="cellShape">Cell Shape:</label>
-                        <select id="cellShape">
-                            <option value="pill" selected>Pill (E. coli-like rods)</option>
-                            <option value="ellipse">Ellipse</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="seed">Random Seed (optional):</label>
-                        <input type="number" id="seed" min="0" placeholder="random">
-                    </div>
-                    <div class="form-group">
-                        <label>Allow Overlap:</label>
-                        <div class="toggle-box disabled" id="allowOverlapToggle" onclick="toggleOverlap()">
-                            <span id="overlapText">Disabled</span>
+        <main class="workspace">
+            <!-- ============================ controls ============================ -->
+            <aside class="panel controls" aria-label="Analysis settings">
+                <form id="settings" class="settings" novalidate>
+                    <section class="step step-static" data-only="analyze">
+                        <h2 class="step-title"><span class="step-n">1</span>Input</h2>
+                        <div class="dropzone" id="dropzone">
+                            <p class="dropzone-file" id="inputSummary">No image selected</p>
+                            <div class="row-buttons">
+                                <button type="button" class="btn btn-small" data-action="open">Choose file…</button>
+                                <button type="button" class="btn btn-small btn-quiet" data-action="sample">Use sample</button>
+                            </div>
+                            <p class="hint">PNG, JPEG, TIFF or BMP &middot; 8- or 16-bit &middot; up to 16 MB. You can also drop a file anywhere on the viewer.</p>
                         </div>
+                    </section>
+
+                    <section class="step step-static" data-only="synthetic">
+                        <h2 class="step-title"><span class="step-n">1</span>Synthetic scene</h2>
+                        <p class="hint">Generates an image with exact ground truth, then scores detection against it.</p>
+                        <div class="field-grid">
+                            <label class="field">
+                                <span class="field-label">Cells</span>
+                                <input type="number" name="num_cells" min="1" max="500" value="60" inputmode="numeric">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Seed</span>
+                                <input type="number" name="seed" min="0" placeholder="random" inputmode="numeric">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span class="field-label">Cell shape</span>
+                            <select name="cell_shape">
+                                <option value="pill" selected>Rods (E. coli-like)</option>
+                                <option value="ellipse">Ellipses</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Detector noise <output data-for="noise_level">0.02</output></span>
+                            <input type="range" name="noise_level" min="0" max="0.1" step="0.005" value="0.02">
+                        </label>
+                        <label class="check">
+                            <input type="checkbox" name="allow_overlap">
+                            <span>Allow overlapping cells (up to 30 %)</span>
+                        </label>
+                    </section>
+
+                    <details class="step" id="sec-pre">
+                        <summary class="step-title"><span class="step-n">2</span>Preprocessing</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Signal channel</span>
+                                <select name="channel">
+                                    <option value="gray" selected>Luminance (all channels)</option>
+                                    <option value="green">Green (GFP)</option>
+                                    <option value="red">Red</option>
+                                    <option value="blue">Blue</option>
+                                    <option value="max">Brightest channel</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Smoothing σ <output data-for="smoothing_sigma" data-unit=" px">1 px</output></span>
+                                <input type="range" name="smoothing_sigma" min="0" max="5" step="0.5" value="1">
+                                <span class="hint">Gaussian denoising before thresholding; 0 turns it off.</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Background correction</span>
+                                <select name="background">
+                                    <option value="none" selected>None</option>
+                                    <option value="tophat">Top-hat (rolling-ball-like)</option>
+                                    <option value="gaussian">Subtract Gaussian blur</option>
+                                </select>
+                            </label>
+                            <label class="field" data-show-if="background!=none">
+                                <span class="field-label">Background radius <output data-for="background_radius" data-unit=" px">25 px</output></span>
+                                <input type="range" name="background_radius" min="5" max="100" step="1" value="25">
+                                <span class="hint">Must be larger than the radius of the biggest cell.</span>
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-det" open>
+                        <summary class="step-title"><span class="step-n">3</span>Detection &amp; segmentation</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Threshold</span>
+                                <select name="threshold_method">
+                                    <option value="otsu" selected>Automatic · Otsu</option>
+                                    <option value="triangle">Automatic · Triangle (sparse, dim cells)</option>
+                                    <option value="adaptive">Adaptive (uneven illumination)</option>
+                                    <option value="fixed">Manual level</option>
+                                </select>
+                            </label>
+                            <label class="field" data-show-if="threshold_method=fixed">
+                                <span class="field-label">Manual level <output data-for="manual_threshold" data-unit=" / 255">50 / 255</output></span>
+                                <input type="range" name="manual_threshold" min="1" max="254" step="1" value="50">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Noise floor <output data-for="min_snr" data-unit=" σ">3 σ</output></span>
+                                <input type="range" name="min_snr" min="0" max="8" step="0.5" value="3">
+                                <span class="hint">Signal must exceed background by this many noise standard deviations. 0 disables.</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Separate touching cells</span>
+                                <select name="split_method">
+                                    <option value="intensity" selected>By intensity valleys (packed rods)</option>
+                                    <option value="distance">By shape necks (round, even cells)</option>
+                                    <option value="none">Don't split</option>
+                                </select>
+                            </label>
+                            <label class="field" data-show-if="split_method=intensity">
+                                <span class="field-label">Valley depth <output data-for="intensity_h">0.05</output></span>
+                                <input type="range" name="intensity_h" min="0.01" max="0.2" step="0.01" value="0.05">
+                                <span class="hint">Higher merges more, lower splits more (fraction of full scale).</span>
+                            </label>
+                            <label class="field" data-show-if="split_method=distance">
+                                <span class="field-label">Neck depth <output data-for="watershed_h" data-unit=" px">1 px</output></span>
+                                <input type="range" name="watershed_h" min="0.5" max="5" step="0.5" value="1">
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-filter">
+                        <summary class="step-title"><span class="step-n">4</span>Filtering &amp; units</summary>
+                        <div class="step-body">
+                            <div class="field-grid">
+                                <label class="field">
+                                    <span class="field-label">Min area (px²)</span>
+                                    <input type="number" name="min_cell_area" min="1" value="15" inputmode="numeric">
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Max area (px²)</span>
+                                    <input type="number" name="max_cell_area" min="1" value="5000" inputmode="numeric">
+                                </label>
+                            </div>
+                            <label class="check">
+                                <input type="checkbox" name="exclude_border">
+                                <span>Exclude cells touching the image edge</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Pixel size (µm)</span>
+                                <input type="number" name="pixel_size_um" min="0" step="0.001" placeholder="unset — results in px" inputmode="decimal">
+                            </label>
+                        </div>
+                    </details>
+
+                    <details class="step" id="sec-class">
+                        <summary class="step-title"><span class="step-n">5</span>Brightness classes</summary>
+                        <div class="step-body">
+                            <label class="field">
+                                <span class="field-label">Method</span>
+                                <select name="classification">
+                                    <option value="absolute" selected>Absolute cut-offs (comparable across images)</option>
+                                    <option value="quantile">Tertiles of this image</option>
+                                    <option value="none">Off</option>
+                                </select>
+                            </label>
+                            <p class="hint">Default cut-offs (142 and 156 of 255) were calibrated on the bundled sample. Recalibrate them for your own microscope in a config file.</p>
+                        </div>
+                    </details>
+                </form>
+
+                <div class="run-bar">
+                    <button type="button" class="btn btn-primary btn-block" id="runBtn" disabled>
+                        <span id="runLabel">Run analysis</span>
+                        <kbd>Ctrl ↵</kbd>
+                    </button>
+                    <button type="button" class="link-btn" id="resetBtn">Restore defaults</button>
+                </div>
+            </aside>
+
+            <!-- ============================= viewer ============================= -->
+            <section class="viewer" aria-label="Image viewer">
+                <div class="toolbar" role="toolbar" aria-label="View controls">
+                    <div class="segmented" role="group" aria-label="Base image">
+                        <button type="button" data-base="original" aria-pressed="true" title="Show the original image">Original</button>
+                        <button type="button" data-base="processed" aria-pressed="false" title="Show the image segmentation operated on (display-stretched)">Processed</button>
                     </div>
-                    <div class="form-group">
-                        <label><input type="checkbox" id="evaluate" checked> Score detection against ground truth</label>
+                    <span class="tb-sep" aria-hidden="true"></span>
+                    <div class="layer-toggles" role="group" aria-label="Overlay layers">
+                        <label class="chip" title="Outlines coloured by brightness class (O)"><input type="checkbox" data-layer="outlines" checked><span>Outlines</span></label>
+                        <label class="chip" title="Filled segmentation labels (M)"><input type="checkbox" data-layer="mask"><span>Mask</span></label>
+                        <label class="chip" title="Cell ID numbers (I)"><input type="checkbox" data-layer="ids"><span>IDs</span></label>
+                        <label class="chip" data-only="synthetic" title="Ground-truth outlines (T)"><input type="checkbox" data-layer="truth"><span>Truth</span></label>
                     </div>
-                    <button class="btn success" onclick="generateSynthetic()">
-                        <i class="fas fa-magic"></i> Generate Image
+                    <label class="opacity" title="Overlay opacity">
+                        <span>Opacity</span>
+                        <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.9" aria-label="Overlay opacity">
+                    </label>
+                    <span class="tb-sep" aria-hidden="true"></span>
+                    <button type="button" class="tool-btn" id="compareBtn" aria-pressed="false" title="Split comparison: original vs. annotated (C)">
+                        <svg width="16" height="16" aria-hidden="true"><use href="#i-compare"/></svg><span>Compare</span>
                     </button>
                 </div>
-            </div>
-            <div id="syntheticResults" class="results-grid"></div>
-        </div>
 
-        <!-- Image Analysis Tab -->
-        <div id="analyze" class="tab-content">
-            <div class="control-panel">
-                <h3><i class="fas fa-upload"></i> Upload Your Cell Image</h3>
-                <br>
-                
-                <!-- Calibration Section -->
-                <div class="calibration-section">
-                    <div class="calibration-header" onclick="toggleCalibration()">
-                        <h4><i class="fas fa-cogs"></i> Calibration</h4>
-                        <i class="fas fa-chevron-down" id="calibrationChevron"></i>
+                <div class="stage" id="stage">
+                    <div class="zoom zoom-dock" role="group" aria-label="Zoom" id="zoomDock" hidden>
+                        <button type="button" class="icon-btn" data-zoom="out" aria-label="Zoom out" title="Zoom out (−)"><svg width="16" height="16" aria-hidden="true"><use href="#i-minus"/></svg></button>
+                        <span class="zoom-readout" id="zoomReadout" aria-live="off">–</span>
+                        <button type="button" class="icon-btn" data-zoom="in" aria-label="Zoom in" title="Zoom in (+)"><svg width="16" height="16" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                        <button type="button" class="icon-btn" data-zoom="fit" aria-label="Fit image to view" title="Fit to view (F)"><svg width="16" height="16" aria-hidden="true"><use href="#i-fit"/></svg></button>
+                        <button type="button" class="tool-btn" data-zoom="one" title="Actual pixels, 100 % (1)">1:1</button>
                     </div>
-                    <div class="calibration-content" id="calibrationContent">
-                        <div class="form-group">
-                            <label for="channel">Signal channel:</label>
-                            <select id="channel">
-                                <option value="gray" selected>Grayscale (luminance)</option>
-                                <option value="green">Green (GFP)</option>
-                                <option value="red">Red</option>
-                                <option value="blue">Blue</option>
-                                <option value="max">Brightest channel</option>
-                            </select>
+                    <canvas id="canvas" aria-label="Microscopy image with detection overlays" role="img"></canvas>
+                    <div class="split" id="split" hidden>
+                        <span class="split-label split-left">Original</span>
+                        <span class="split-label split-right">Annotated</span>
+                        <button type="button" class="split-handle" id="splitHandle" aria-label="Drag to move the comparison divider"></button>
+                    </div>
+                    <div class="empty" id="emptyState">
+                        <svg width="40" height="40" aria-hidden="true"><use href="#i-cells"/></svg>
+                        <h2>Open a fluorescence micrograph</h2>
+                        <p>Drop an image here, choose a file, or start with the bundled <i>E. coli</i> GFP sample. It is analysed straight away with sensible defaults, and every setting can be adjusted afterwards.</p>
+                        <div class="row-buttons">
+                            <button type="button" class="btn btn-primary" data-action="open">Open image…</button>
+                            <button type="button" class="btn btn-on-dark" data-action="sample">Use sample image</button>
                         </div>
-                        <div class="form-group">
-                            <label for="thresholdMethod">Threshold:</label>
-                            <select id="thresholdMethod" onchange="syncThresholdControls()">
-                                <option value="otsu" selected>Automatic (Otsu)</option>
-                                <option value="triangle">Automatic (Triangle, dim/sparse cells)</option>
-                                <option value="adaptive">Adaptive (uneven illumination)</option>
-                                <option value="fixed">Manual</option>
-                            </select>
+                    </div>
+                    <div class="empty" id="emptySynthetic" hidden>
+                        <svg width="40" height="40" aria-hidden="true"><use href="#i-cells"/></svg>
+                        <h2>Validate the pipeline on known ground truth</h2>
+                        <p>Generate a synthetic image, then compare detected cells with the true ones. Precision, recall and F1 appear on the right.</p>
+                        <div class="row-buttons">
+                            <button type="button" class="btn btn-primary" data-action="run">Generate &amp; analyze</button>
                         </div>
-                        <div class="form-group" id="manualThresholdGroup">
-                            <label for="manualThreshold">Manual threshold (0-255): <span id="manualThresholdValue">50</span></label>
-                            <input type="range" id="manualThreshold" min="1" max="254" value="50" step="1"
-                                oninput="document.getElementById('manualThresholdValue').textContent = this.value">
-                        </div>
-                        <div class="form-group">
-                            <label for="splitMethod">Separate touching cells:</label>
-                            <select id="splitMethod">
-                                <option value="intensity" selected>By intensity valleys (packed rods)</option>
-                                <option value="distance">By shape necks (round cells)</option>
-                                <option value="none">Do not split</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="minCellArea">Min cell area (px²): <span id="minCellAreaValue">15</span></label>
-                            <input type="range" id="minCellArea" min="1" max="1000" value="15" step="1"
-                                oninput="document.getElementById('minCellAreaValue').textContent = this.value">
-                        </div>
-                        <div class="form-group">
-                            <label for="maxCellArea">Max cell area (px²): <span id="maxCellAreaValue">5000</span></label>
-                            <input type="range" id="maxCellArea" min="100" max="20000" value="5000" step="100"
-                                oninput="document.getElementById('maxCellAreaValue').textContent = this.value">
-                        </div>
-                        <div class="form-group">
-                            <label for="smoothingSigma">Smoothing σ (px, 0 = off): <span id="smoothingSigmaValue">1</span></label>
-                            <input type="range" id="smoothingSigma" min="0" max="5" value="1" step="0.5"
-                                oninput="document.getElementById('smoothingSigmaValue').textContent = this.value">
-                        </div>
-                        <div class="form-group">
-                            <label><input type="checkbox" id="excludeBorder"> Exclude cells touching the image edge</label>
-                        </div>
+                    </div>
+                    <div class="busy" id="busy" hidden>
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span id="busyText">Analysing…</span>
+                    </div>
+                    <div class="drop-hint" id="dropHint" hidden>Drop to open</div>
+                    <div class="viewer-error" id="viewerError" role="alert" hidden>
+                        <strong>Analysis failed.</strong> <span id="viewerErrorText"></span>
+                        <button type="button" class="link-btn" id="dismissError">Dismiss</button>
                     </div>
                 </div>
 
-                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
-                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
-                    <h4>Click to upload or drag & drop your image here</h4>
-                    <p>Supports JPG, PNG, TIFF formats</p>
-                    <input type="file" id="fileInput" accept="image/*" style="display: none;"
-                        onchange="handleFileSelect(this)">
+                <footer class="statusbar" aria-label="Image information">
+                    <span id="sbDims">No image loaded</span>
+                    <span id="sbZoom"></span>
+                    <span id="sbPos"></span>
+                    <span id="sbValue"></span>
+                    <span id="sbCell"></span>
+                    <span class="sb-hint">Scroll to zoom &middot; drag to pan</span>
+                </footer>
+            </section>
+
+            <!-- ============================= results ============================ -->
+            <aside class="panel results" aria-label="Results">
+                <div class="results-empty" id="resultsEmpty">
+                    <h2 class="panel-title">Results</h2>
+                    <p class="hint">Measurements appear here after an analysis: counts, size and intensity statistics, every cell, and exports.</p>
                 </div>
-                <br>
-                <button class="btn info" onclick="analyzeSampleImage()" style="margin-bottom: 15px;">
-                    <i class="fas fa-image"></i> Use Sample Image (E. coli with GFP)
-                </button>
-            </div>
-            <div id="analysisResults" class="results-grid"></div>
-        </div>
+
+                <div class="results-body" id="resultsBody" hidden>
+                    <section class="block" id="evalBlock" hidden>
+                        <h2 class="panel-title">Detection vs. ground truth</h2>
+                        <dl class="metrics metrics-3" id="evalMetrics"></dl>
+                        <p class="hint" id="evalNote"></p>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Summary <span class="stale-tag" id="staleTag" hidden>settings changed</span></h2>
+                        <dl class="metrics" id="summaryMetrics"></dl>
+                    </section>
+
+                    <section class="block" id="classBlock">
+                        <h2 class="panel-title">Brightness classes</h2>
+                        <ul class="classes" id="classList"></ul>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Area distribution</h2>
+                        <div class="histogram" id="histogram"></div>
+                    </section>
+
+                    <section class="block" id="cellDetail" hidden>
+                        <h2 class="panel-title">Cell <span id="cellDetailId"></span> <button type="button" class="link-btn" id="zoomToCell">Zoom to cell</button></h2>
+                        <dl class="kv" id="cellDetailList"></dl>
+                    </section>
+
+                    <section class="block block-table">
+                        <h2 class="panel-title">Cells <span class="count" id="cellCount"></span></h2>
+                        <div class="table-wrap">
+                            <table class="cells" id="cellTable">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" data-key="cell_id" aria-sort="ascending"><button type="button">ID</button></th>
+                                        <th scope="col" data-key="area_px"><button type="button">Area</button></th>
+                                        <th scope="col" data-key="circularity"><button type="button">Circ.</button></th>
+                                        <th scope="col" data-key="mean_intensity"><button type="button">Mean I</button></th>
+                                        <th scope="col" data-key="brightness"><button type="button">Class</button></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="block">
+                        <h2 class="panel-title">Export</h2>
+                        <div class="exports">
+                            <button type="button" class="btn btn-small" data-export="csv"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Cells CSV</button>
+                            <button type="button" class="btn btn-small" data-export="json"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Report JSON</button>
+                            <button type="button" class="btn btn-small" data-export="overlay"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Overlay PNG</button>
+                            <button type="button" class="btn btn-small" data-export="figure"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg>Figure PNG</button>
+                        </div>
+                        <p class="hint">The JSON report records the software version, the input's SHA-256 and every setting used.</p>
+                    </section>
+                </div>
+            </aside>
+        </main>
     </div>
 
-    <script>
-        // ---------- helpers ----------
-        const $ = (id) => document.getElementById(id);
-        const fmt = (v, digits = 1) => (v === null || v === undefined) ? '–' : Number(v).toFixed(digits);
+    <dialog class="help" id="helpDialog" aria-labelledby="helpTitle">
+        <form method="dialog" class="help-inner">
+            <header class="help-head">
+                <h2 id="helpTitle">Using Cell-Identifier <span class="version">v{{ version }}</span></h2>
+                <button class="icon-btn" value="close" aria-label="Close help">✕</button>
+            </header>
+            <div class="help-cols">
+                <section>
+                    <h3>Workflow</h3>
+                    <ol>
+                        <li><b>Open</b> an image (or the sample). It is analysed with the defaults.</li>
+                        <li><b>Inspect</b>: zoom, pan, toggle layers and compare with the original.</li>
+                        <li><b>Adjust</b> settings on the left, then <b>Run analysis</b>.</li>
+                        <li><b>Export</b> the cell table, full report or figures.</li>
+                    </ol>
+                    <h3>Layers</h3>
+                    <dl class="kv">
+                        <dt>Original</dt><dd>Your image, unmodified.</dd>
+                        <dt>Processed</dt><dd>What segmentation saw: channel, smoothing and background correction applied, linearly stretched for display. Measurements always use the original intensities.</dd>
+                        <dt>Outlines</dt><dd>Cell boundaries, coloured by brightness class (<span class="sw sw-low"></span>Low, <span class="sw sw-med"></span>Medium, <span class="sw sw-high"></span>High). Okabe–Ito colours are distinguishable with colour-vision deficiency.</dd>
+                        <dt>Mask</dt><dd>Each segmented cell filled with its own colour.</dd>
+                        <dt>Ground truth</dt><dd>Validate mode only: the true cell outlines, in purple.</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h3>Keyboard</h3>
+                    <dl class="keys">
+                        <dt><kbd>Ctrl</kbd> <kbd>↵</kbd></dt><dd>Run analysis</dd>
+                        <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom in / out</dd>
+                        <dt><kbd>F</kbd></dt><dd>Fit to view</dd>
+                        <dt><kbd>1</kbd></dt><dd>Actual pixels (100 %)</dd>
+                        <dt><kbd>C</kbd></dt><dd>Toggle comparison</dd>
+                        <dt><kbd>O</kbd> <kbd>M</kbd> <kbd>I</kbd> <kbd>T</kbd></dt><dd>Outlines, mask, IDs, ground truth</dd>
+                        <dt><kbd>P</kbd></dt><dd>Original / processed</dd>
+                        <dt><kbd>Esc</kbd></dt><dd>Clear selection</dd>
+                    </dl>
+                    <h3>Method</h3>
+                    <p>Otsu (or chosen) threshold held above a robust noise floor, then a marker-controlled watershed splits touching cells. Shape and intensity are measured per cell on the raw signal. Full details: <a href="https://github.com/delnorte-sd/Cell-Identifier/blob/main/docs/METHODS.md" target="_blank" rel="noopener">docs/METHODS.md</a>.</p>
+                </section>
+            </div>
+        </form>
+    </dialog>
 
-        function showLoading(containerId, text) {
-            $(containerId).innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <span></span>
-                </div>`;
-            $(containerId).querySelector('span').textContent = text;
-        }
-
-        // Errors are inserted as text, never as HTML.
-        function showError(message, containerId) {
-            const container = $(containerId);
-            container.innerHTML = `
-                <div class="error">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span></span>
-                </div>`;
-            container.querySelector('span').textContent = message;
-        }
-
-        async function postJson(url, body) {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            return response.json();
-        }
-
-        function download(filename, content, type) {
-            const blob = content instanceof Blob ? content : new Blob([content], { type });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(link.href);
-        }
-
-        // ---------- tabs ----------
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                button.classList.add('active');
-                $(button.dataset.tab).classList.add('active');
-            });
-        });
-
-        // ---------- upload ----------
-        function handleFileSelect(input) {
-            if (input.files && input.files[0]) {
-                analyzeImage(input.files[0]);
-            }
-        }
-
-        const fileUpload = document.querySelector('.file-upload');
-        fileUpload.addEventListener('dragover', (e) => { e.preventDefault(); fileUpload.classList.add('dragover'); });
-        fileUpload.addEventListener('dragleave', () => fileUpload.classList.remove('dragover'));
-        fileUpload.addEventListener('drop', (e) => {
-            e.preventDefault();
-            fileUpload.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                analyzeImage(e.dataTransfer.files[0]);
-            }
-        });
-
-        // ---------- synthetic generation ----------
-        let allowOverlap = false;
-
-        function toggleOverlap() {
-            allowOverlap = !allowOverlap;
-            $('allowOverlapToggle').classList.toggle('disabled', !allowOverlap);
-            $('overlapText').textContent = allowOverlap ? 'Enabled' : 'Disabled';
-        }
-
-        async function generateSynthetic() {
-            showLoading('syntheticResults', 'Generating synthetic cells...');
-            const seed = $('seed').value;
-            try {
-                const data = await postJson('/api/generate', {
-                    num_cells: parseInt($('numCells').value, 10),
-                    noise_level: parseFloat($('noiseLevel').value),
-                    cell_shape: $('cellShape').value,
-                    allow_overlap: allowOverlap,
-                    seed: seed === '' ? null : parseInt(seed, 10),
-                    evaluate: $('evaluate').checked
-                });
-                if (data.success) {
-                    displaySyntheticResults(data);
-                } else {
-                    showError(data.error, 'syntheticResults');
-                }
-            } catch (error) {
-                showError('Failed to generate synthetic image: ' + error.message, 'syntheticResults');
-            }
-        }
-
-        function displaySyntheticResults(data) {
-            const cells = data.cell_data;
-            const n = Math.max(cells.length, 1);
-            const avgIntensity = cells.reduce((s, c) => s + c.intensity, 0) / n;
-            const avgArea = cells.reduce((s, c) => s + c.area_px, 0) / n;
-            const lengthLabel = data.cell_shape === 'pill' ? 'Length' : 'Major axis';
-            const widthLabel = data.cell_shape === 'pill' ? 'Width' : 'Minor axis';
-            const rows = cells.map(c => `
-                <tr>
-                    <td>${c.cell_id}</td>
-                    <td>(${fmt(c.center_x)}, ${fmt(c.center_y)})</td>
-                    <td>${fmt(c.length)}px</td>
-                    <td>${fmt(c.width)}px</td>
-                    <td>${fmt(c.angle_deg)}°</td>
-                    <td>${fmt(c.intensity * 100)}%</td>
-                    <td>${c.area_px}px²</td>
-                </tr>`).join('');
-
-            let evaluation = '';
-            if (data.evaluation) {
-                const e = data.evaluation;
-                evaluation = `
-                    <h4 style="margin-top: 20px;"><i class="fas fa-check-double"></i> Detection vs. ground truth (IoU &gt; ${e.iou_threshold})</h4>
-                    <div style="text-align:center;"><img src="${data.result_image}" alt="Detected cells" class="result-image"></div>
-                    <div class="stats-grid">
-                        <div class="stat-item"><div class="stat-value">${e.predicted_count}/${e.true_count}</div><div class="stat-label">Detected / True</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(e.precision * 100)}%</div><div class="stat-label">Precision</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(e.recall * 100)}%</div><div class="stat-label">Recall</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(e.f1, 3)}</div><div class="stat-label">F1 score</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(e.mean_iou, 2)}</div><div class="stat-label">Mean IoU</div></div>
-                    </div>`;
-            }
-
-            $('syntheticResults').innerHTML = `
-                <div class="result-card">
-                    <h3><i class="fas fa-magic"></i> Generated Synthetic Image</h3>
-                    <div style="text-align: center;">
-                        <a href="${data.image}" download="synthetic_cells.png" title="Click to download image" style="display: inline-block;">
-                            <img src="${data.image}" alt="Synthetic Cell Image" class="result-image download-hover">
-                        </a>
-                    </div>
-                    <div style="text-align:center; font-size:0.9rem; color:#666; margin-bottom:15px;">
-                        <i class="fas fa-download"></i> Click image to download${data.seed !== null ? ` &middot; seed ${data.seed}` : ''}
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-item"><div class="stat-value">${data.cell_count}/${data.requested}</div><div class="stat-label">Cells placed / requested</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(avgIntensity * 100)}%</div><div class="stat-label">Avg peak intensity</div></div>
-                        <div class="stat-item"><div class="stat-value">${Math.round(avgArea)}</div><div class="stat-label">Avg area (px²)</div></div>
-                    </div>
-                    ${evaluation}
-                    <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Ground-truth cell data</h4>
-                    <table class="cell-data-table">
-                        <thead><tr>
-                            <th>Cell ID</th><th>Center (x, y)</th><th>${lengthLabel}</th><th>${widthLabel}</th>
-                            <th>Angle</th><th>Intensity</th><th>Area</th>
-                        </tr></thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>`;
-        }
-
-        // ---------- analysis ----------
-        function syncThresholdControls() {
-            $('manualThresholdGroup').style.display = $('thresholdMethod').value === 'fixed' ? 'block' : 'none';
-        }
-
-        function analysisParams() {
-            return {
-                channel: $('channel').value,
-                threshold_method: $('thresholdMethod').value,
-                manual_threshold: parseFloat($('manualThreshold').value),
-                split_method: $('splitMethod').value,
-                min_cell_area: parseInt($('minCellArea').value, 10),
-                max_cell_area: parseInt($('maxCellArea').value, 10),
-                smoothing_sigma: parseFloat($('smoothingSigma').value),
-                exclude_border: $('excludeBorder').checked
-            };
-        }
-
-        async function analyzeImage(file) {
-            showLoading('analysisResults', 'Analyzing your image...');
-            const formData = new FormData();
-            formData.append('file', file);
-            for (const [key, value] of Object.entries(analysisParams())) {
-                formData.append(key, value);
-            }
-            try {
-                const response = await fetch('/api/analyze', { method: 'POST', body: formData });
-                const data = await response.json();
-                data.success ? displayAnalysisResults(data) : showError(data.error, 'analysisResults');
-            } catch (error) {
-                showError('Failed to analyze image: ' + error.message, 'analysisResults');
-            }
-        }
-
-        async function analyzeSampleImage() {
-            showLoading('analysisResults', 'Analyzing sample image...');
-            try {
-                const data = await postJson('/api/analyze', { sample: true, ...analysisParams() });
-                data.success ? displayAnalysisResults(data) : showError(data.error, 'analysisResults');
-            } catch (error) {
-                showError('Failed to analyze sample image: ' + error.message, 'analysisResults');
-            }
-        }
-
-        let lastAnalysis = null;
-
-        function displayAnalysisResults(data) {
-            lastAnalysis = data;
-            const s = data.summary;
-            const rows = data.cells.map(c => `
-                <tr>
-                    <td>${c.cell_id}</td>
-                    <td>(${fmt(c.centroid_x)}, ${fmt(c.centroid_y)})</td>
-                    <td>${c.area_px}</td>
-                    <td>${fmt(c.major_axis_px)} × ${fmt(c.minor_axis_px)}</td>
-                    <td>${fmt(c.circularity, 2)}</td>
-                    <td>${fmt(c.mean_intensity)}</td>
-                    <td>${fmt(c.mean_intensity_corrected)}</td>
-                    <td>${c.brightness}</td>
-                </tr>`).join('');
-
-            $('analysisResults').innerHTML = `
-                <div class="result-card">
-                    <h3><i class="fas fa-search"></i> Analysis Results</h3>
-                    <img src="${data.figure_image}" alt="Original, detected cells and segmentation labels" class="result-image">
-                    <div class="button-row">
-                        <button class="btn info" onclick="download('cells.csv', lastAnalysis.csv, 'text/csv')"><i class="fas fa-file-csv"></i> Cells (CSV)</button>
-                        <button class="btn info" onclick="download('results.json', JSON.stringify(lastAnalysis.report, null, 2), 'application/json')"><i class="fas fa-file-code"></i> Full report (JSON)</button>
-                        <a class="btn info" href="${data.result_image}" download="overlay.png"><i class="fas fa-image"></i> Overlay (PNG)</a>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-item"><div class="stat-value">${s.cell_count}</div><div class="stat-label">Cells detected</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(s.area_px.mean, 0)}</div><div class="stat-label">Mean area (px²)</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(s.mean_intensity.mean)} ± ${fmt(s.mean_intensity.std)}</div><div class="stat-label">Mean intensity ± SD</div></div>
-                        <div class="stat-item"><div class="stat-value">${fmt(s.coverage_fraction * 100)}%</div><div class="stat-label">Area coverage</div></div>
-                        <div class="stat-item"><div class="stat-value">${s.brightness_counts.Low} / ${s.brightness_counts.Medium} / ${s.brightness_counts.High}</div><div class="stat-label">Low / Medium / High</div></div>
-                    </div>
-                    ${data.cells.length > 0 ? `
-                        <h4 style="margin-top: 20px;"><i class="fas fa-table"></i> Detected cell data</h4>
-                        <table class="cell-data-table">
-                            <thead><tr>
-                                <th>Cell ID</th><th>Centroid (x, y)</th><th>Area (px²)</th><th>Axes (px)</th>
-                                <th>Circularity</th><th>Mean intensity</th><th>Background-corrected</th><th>Brightness</th>
-                            </tr></thead>
-                            <tbody>${rows}</tbody>
-                        </table>` : '<p style="text-align: center; margin-top: 20px; color: #666;">No cells detected in this image.</p>'}
-                </div>`;
-        }
-
-        // ---------- calibration panel ----------
-        function toggleCalibration() {
-            const content = $('calibrationContent');
-            const chevron = $('calibrationChevron');
-            const opening = content.style.display === 'none' || content.style.display === '';
-            content.style.display = opening ? 'block' : 'none';
-            chevron.classList.toggle('fa-chevron-down', !opening);
-            chevron.classList.toggle('fa-chevron-up', opening);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            $('calibrationContent').style.display = 'none';
-            syncThresholdControls();
-        });
-    </script>
+    <script src="{{ url_for('static', filename='app.js') }}?v={{ version }}" defer></script>
 </body>
 
 </html>
