@@ -23,7 +23,7 @@ Cell Identifier turns a fluorescence micrograph into a table of cells: where eac
 | **Reproducible** | Deterministic pipeline. Every report records the software version, the input file's SHA-256, the full configuration and a timestamp. |
 | **Bit-depth aware** | 8-bit and 16-bit images give identical segmentations; intensities are reported in the native units of the image. |
 | **Three interfaces** | `analyze()` in Python, `cell-identifier` on the command line, and a Flask web UI. |
-| **Tested** | 161 tests, 97 % branch coverage, CI on Linux, Windows and macOS. |
+| **Tested** | 167 tests, 97 % branch coverage, CI on Linux, Windows and macOS. |
 
 ## Quickstart
 
@@ -100,7 +100,17 @@ cell-identifier serve                 # local development
 gunicorn app:app                      # production (this is what Render runs)
 ```
 
-The web app has two tabs. **Analyze Real Images** takes an upload (or the bundled sample) and lets you adjust the calibration, then shows the figure and statistics and offers CSV, JSON and overlay downloads. **Generate Synthetic Cells** creates seeded images and can score detection against the ground truth on the spot. Uploads are processed in memory and never written to disk.
+The web workspace is built like an image viewer, not a form.
+
+- **Viewer.** The image gets most of the screen, on a dark canvas so fluorescence reads correctly. You can zoom about the cursor (wheel, `+`/`−`), drag to pan, fit to view or show actual pixels (1:1). Magnified pixels are shown as they are, with no interpolation.
+- **Layers.** Switch the base image between *Original* and *Processed*, the image segmentation actually saw. Toggle independent overlays: outlines coloured by brightness class, the filled label mask, cell IDs and (in Validate mode) ground truth. One slider sets overlay opacity.
+- **Compare.** A draggable split shows the untouched original on one side and the annotated view on the other.
+- **Inspect.** Hovering a cell highlights it; the status bar shows its pixel coordinates and value and the cell under the cursor (exact, read from the label image). Clicking selects a cell and lists all its measurements. Selection stays in sync with a sortable cell table and the area histogram.
+- **Settings.** Numbered sections follow the order of the pipeline: input, preprocessing, detection, filtering, classes. Changing a setting marks the results as stale rather than silently re-running; press **Run analysis** or Ctrl+Enter.
+- **Validate mode.** Generates a seeded synthetic image with exact ground truth and reports precision, recall and F1 for the current settings.
+- **Export.** Cells CSV, the full JSON report, the overlay PNG and the comparison figure.
+
+Press `?` in the app for all keyboard shortcuts. The design rationale is in [docs/UI_DESIGN.md](docs/UI_DESIGN.md). Uploads are processed in memory and never written to disk.
 
 ## How it works
 
@@ -166,7 +176,7 @@ All settings live in [`src/cell_identifier/config.py`](src/cell_identifier/confi
 
 ```bash
 pip install -e ".[dev,web,plot]"
-pytest                               # 161 tests
+pytest                               # 167 tests
 pytest --cov                         # with coverage
 ruff check src tests app.py          # lint
 ruff format src tests app.py         # format

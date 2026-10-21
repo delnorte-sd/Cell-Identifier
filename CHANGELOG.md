@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 — Web workspace redesign
+
+### Added
+- Viewer-centred web workspace: the canvas viewer has real zoom (about the cursor), pan, fit and 1:1, with
+  nearest-neighbour magnification so pixels are never interpolated.
+- Independently composited layers from the API: original, processed (segmentation input), transparent label
+  mask, transparent outlines and ground truth, plus an overlay opacity control.
+- Draggable split comparison (original vs. annotated).
+- Exact hover picking from a 24-bit label-ID image: the status bar shows coordinates, the pixel value and the cell
+  under the cursor; click to select a cell and see all its measurements.
+- Sortable, keyboard-navigable cell table, an area histogram of the real cells, and brightness-class
+  proportions, all linked to the viewer selection.
+- Settings grouped by pipeline stage, with background correction, noise floor, split sensitivity and pixel size
+  now exposed. Results are marked stale when settings change; Ctrl+Enter re-runs.
+- Validate mode applies the current analysis settings to seeded synthetic images and reports
+  precision/recall/F1.
+- Keyboard shortcuts, a help dialog, `aria-live` status, visible focus, and responsive layouts for laptop,
+  tablet and phone.
+- `docs/UI_DESIGN.md` design specification; `render_outline_layer`, `render_label_layer`,
+  `encode_label_ids` and `render_processed` in the visualisation module.
+
+### Changed
+- The calm neutral interface uses an accessible sage accent (WCAG AA contrast) and Okabe–Ito data colours. The
+  Font Awesome CDN dependency was removed in favour of a small inline icon set.
+- `/api/analyze` responses include `image_info` and `layers`; `/api/generate` with `evaluate` returns the full
+  analysis payload plus a ground-truth layer. Existing response keys are unchanged.
+
 ## 1.0.0 — Professional overhaul
 
 ### Added

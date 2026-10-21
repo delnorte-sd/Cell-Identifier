@@ -24,7 +24,7 @@ Subpackages and modules:
 * :mod:`~cell_identifier.evaluation` - precision / recall / F1 against ground truth
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from .config import (
     AnalysisConfig,
