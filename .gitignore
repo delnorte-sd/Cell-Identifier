@@ -21,3 +21,7 @@ htmlcov/
 results/
 synthetic/
 uploads/
+
+# Downloaded training data and trained-model work dirs (large; see docs/TRAINING.md)
+datasets/
+runs/

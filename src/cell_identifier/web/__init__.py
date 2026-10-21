@@ -17,6 +17,7 @@ import base64
 import csv
 import io
 import logging
+import os
 from collections.abc import Mapping
 from importlib import resources
 from typing import Any
@@ -27,7 +28,7 @@ from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 from .. import __version__
 from ..config import AnalysisConfig, ConfigError, SyntheticConfig
 from ..evaluation import match_labels
-from ..image_io import ImageValidationError, encode_png
+from ..image_io import ImageValidationError, encode_png, load_image
 from ..pipeline import AnalysisResult, analyze
 from ..reporting import CELL_COLUMNS, result_to_dict
 from ..synthetic import generate
@@ -48,6 +49,13 @@ logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 MAX_SYNTHETIC_CELLS = 500
+#: Largest image (pixels) analysed through the web interface. Keeps peak memory
+#: within a small cloud instance (512 MB); larger images can be analysed with
+#: the command-line tool, which has no such limit.
+MAX_WEB_PIXELS = int(os.environ.get("CELL_IDENTIFIER_MAX_PIXELS", 2048 * 2048))
+#: Above this size the side-by-side comparison figure is not rendered for the
+#: browser (it triples the image width); it remains available from the CLI.
+MAX_FIGURE_PIXELS = 2_000_000
 SAMPLE_IMAGE = "sample.jpeg"
 
 
@@ -122,6 +130,10 @@ def analysis_config_from_params(params: Mapping[str, Any]) -> AnalysisConfig:
         data["filter"]["exclude_border"] = border
     if (classification := _get(params, "classification", str)) is not None:
         data["classification"]["method"] = classification
+    if (engine := _get(params, "engine", str)) is not None:
+        data["segmentation"]["engine"] = engine
+    if (width := _get(params, "cell_width_px", float)) is not None:
+        data["learned"] = {"cell_width_px": width}
     if (background := _get(params, "background", str)) is not None:
         data["preprocess"]["background"] = background
     if (radius := _get(params, "background_radius", float)) is not None:
@@ -172,8 +184,17 @@ def _analysis_payload(result: AnalysisResult) -> dict[str, Any]:
             "outlines": _data_url(render_outline_layer(result.labels, result.cells)),
             "ids": _data_url(encode_label_ids(result.labels)),
         },
-        "result_image": _data_url(render_overlay(result.image, result.labels, result.cells)),
-        "figure_image": _data_url(result_figure(result)),
+        # Large images: the browser composes the overlay export from the layers.
+        "result_image": (
+            _data_url(render_overlay(result.image, result.labels, result.cells))
+            if meta.width * meta.height <= MAX_FIGURE_PIXELS
+            else None
+        ),
+        "figure_image": (
+            _data_url(result_figure(result))
+            if meta.width * meta.height <= MAX_FIGURE_PIXELS
+            else None
+        ),
         "cell_count": result.cell_count,
         "summary": report["summary"],
         "cells": report["cells"],
@@ -189,6 +210,12 @@ def create_app(config: Mapping[str, Any] | None = None) -> Flask:
         config: Optional Flask configuration overrides (e.g. ``{"TESTING": True}``).
     """
     app = Flask(__name__)
+    try:  # load the segmentation model once, at start-up, not on the first request
+        from ..learned import load_model
+
+        load_model()
+    except FileNotFoundError:  # pragma: no cover - the model ships with the package
+        logger.warning("bundled learned model not found; only the classical engine will work")
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
     app.config["JSON_SORT_KEYS"] = False
     if config:
@@ -243,7 +270,16 @@ def create_app(config: Mapping[str, Any] | None = None) -> Flask:
             raw = upload.read()
             name = upload.filename
         config = analysis_config_from_params(params)
-        result = analyze(raw, config, name=name)
+        loaded = load_image(raw, name=name)
+        pixels = loaded.metadata.width * loaded.metadata.height
+        if pixels > MAX_WEB_PIXELS:
+            raise InvalidRequestError(
+                f"image is {loaded.metadata.width}x{loaded.metadata.height} px "
+                f"({pixels / 1e6:.1f} MP); the web app accepts up to "
+                f"{MAX_WEB_PIXELS / 1e6:.1f} MP. Use the command-line tool "
+                "(cell-identifier analyze) for larger images."
+            )
+        result = analyze(loaded, config)
         return jsonify(_analysis_payload(result))
 
     @app.post("/api/generate")

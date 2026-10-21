@@ -135,4 +135,4 @@ def test_example_config_file_loads() -> None:
     example = Path(__file__).resolve().parents[1] / "examples" / "analysis.toml"
     config = load_config_file(example, AnalysisConfig)
     assert config.segmentation.split_method == "intensity"
-    assert config.classification.low_cutoff == pytest.approx(142 / 255, abs=1e-4)
+    assert config.classification.low_cutoff == pytest.approx(126 / 255, abs=1e-4)

@@ -391,6 +391,11 @@ details.step[open] > summary::after { transform: rotate(-135deg) translateY(-2px
     font-variant-numeric: tabular-nums;
 }
 
+.field-group {
+    display: grid;
+    gap: 14px;
+}
+
 .field-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

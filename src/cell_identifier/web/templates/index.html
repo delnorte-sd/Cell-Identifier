@@ -136,40 +136,55 @@
                         <summary class="step-title"><span class="step-n">3</span>Detection &amp; segmentation</summary>
                         <div class="step-body">
                             <label class="field">
-                                <span class="field-label">Threshold</span>
-                                <select name="threshold_method">
-                                    <option value="otsu" selected>Automatic · Otsu</option>
-                                    <option value="triangle">Automatic · Triangle (sparse, dim cells)</option>
-                                    <option value="adaptive">Adaptive (uneven illumination)</option>
-                                    <option value="fixed">Manual level</option>
+                                <span class="field-label">Segmentation engine</span>
+                                <select name="engine">
+                                    <option value="learned" selected>Learned · trained U-Net (recommended)</option>
+                                    <option value="classical">Classical · threshold + watershed</option>
                                 </select>
+                                <span class="hint" data-show-if="engine=learned">A neural network trained on expert-annotated fluorescence images of bacteria. Most accurate on real micrographs.</span>
                             </label>
-                            <label class="field" data-show-if="threshold_method=fixed">
-                                <span class="field-label">Manual level <output data-for="manual_threshold" data-unit=" / 255">50 / 255</output></span>
-                                <input type="range" name="manual_threshold" min="1" max="254" step="1" value="50">
+                            <label class="field" data-show-if="engine=learned">
+                                <span class="field-label">Typical cell width (px)</span>
+                                <input type="number" name="cell_width_px" min="0" max="200" step="0.5" placeholder="auto-detect" inputmode="decimal">
+                                <span class="hint">Leave empty to detect it automatically. Set it if cells are unusually small or large.</span>
                             </label>
-                            <label class="field">
-                                <span class="field-label">Noise floor <output data-for="min_snr" data-unit=" σ">3 σ</output></span>
-                                <input type="range" name="min_snr" min="0" max="8" step="0.5" value="3">
-                                <span class="hint">Signal must exceed background by this many noise standard deviations. 0 disables.</span>
-                            </label>
-                            <label class="field">
-                                <span class="field-label">Separate touching cells</span>
-                                <select name="split_method">
-                                    <option value="intensity" selected>By intensity valleys (packed rods)</option>
-                                    <option value="distance">By shape necks (round, even cells)</option>
-                                    <option value="none">Don't split</option>
-                                </select>
-                            </label>
-                            <label class="field" data-show-if="split_method=intensity">
-                                <span class="field-label">Valley depth <output data-for="intensity_h">0.05</output></span>
-                                <input type="range" name="intensity_h" min="0.01" max="0.2" step="0.01" value="0.05">
-                                <span class="hint">Higher merges more, lower splits more (fraction of full scale).</span>
-                            </label>
-                            <label class="field" data-show-if="split_method=distance">
-                                <span class="field-label">Neck depth <output data-for="watershed_h" data-unit=" px">1 px</output></span>
-                                <input type="range" name="watershed_h" min="0.5" max="5" step="0.5" value="1">
-                            </label>
+                            <div class="field-group" data-show-if="engine=classical">
+                                <label class="field">
+                                    <span class="field-label">Threshold</span>
+                                    <select name="threshold_method">
+                                        <option value="otsu" selected>Automatic · Otsu</option>
+                                        <option value="triangle">Automatic · Triangle (sparse, dim cells)</option>
+                                        <option value="adaptive">Adaptive (uneven illumination)</option>
+                                        <option value="fixed">Manual level</option>
+                                    </select>
+                                </label>
+                                <label class="field" data-show-if="threshold_method=fixed">
+                                    <span class="field-label">Manual level <output data-for="manual_threshold" data-unit=" / 255">50 / 255</output></span>
+                                    <input type="range" name="manual_threshold" min="1" max="254" step="1" value="50">
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Noise floor <output data-for="min_snr" data-unit=" σ">3 σ</output></span>
+                                    <input type="range" name="min_snr" min="0" max="8" step="0.5" value="3">
+                                    <span class="hint">Signal must exceed background by this many noise standard deviations. 0 disables.</span>
+                                </label>
+                                <label class="field">
+                                    <span class="field-label">Separate touching cells</span>
+                                    <select name="split_method">
+                                        <option value="intensity" selected>By intensity valleys (packed rods)</option>
+                                        <option value="distance">By shape necks (round, even cells)</option>
+                                        <option value="none">Don't split</option>
+                                    </select>
+                                </label>
+                                <label class="field" data-show-if="split_method=intensity">
+                                    <span class="field-label">Valley depth <output data-for="intensity_h">0.05</output></span>
+                                    <input type="range" name="intensity_h" min="0.01" max="0.2" step="0.01" value="0.05">
+                                    <span class="hint">Higher merges more, lower splits more (fraction of full scale).</span>
+                                </label>
+                                <label class="field" data-show-if="split_method=distance">
+                                    <span class="field-label">Neck depth <output data-for="watershed_h" data-unit=" px">1 px</output></span>
+                                    <input type="range" name="watershed_h" min="0.5" max="5" step="0.5" value="1">
+                                </label>
+                            </div>
                         </div>
                     </details>
 
@@ -208,7 +223,7 @@
                                     <option value="none">Off</option>
                                 </select>
                             </label>
-                            <p class="hint">Default cut-offs (142 and 156 of 255) were calibrated on the bundled sample. Recalibrate them for your own microscope in a config file.</p>
+                            <p class="hint">Default cut-offs (126 and 147 of 255) were calibrated on the bundled sample. Recalibrate them for your own microscope in a config file.</p>
                         </div>
                     </details>
                 </form>

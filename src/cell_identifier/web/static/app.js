@@ -150,6 +150,7 @@
     function analysisParams() {
         const f = els.form.elements;
         const params = {
+            engine: f.engine.value,
             channel: f.channel.value,
             smoothing_sigma: f.smoothing_sigma.value,
             background: f.background.value,
@@ -166,6 +167,7 @@
             classification: f.classification.value,
         };
         if (f.pixel_size_um.value) params.pixel_size_um = f.pixel_size_um.value;
+        if (f.cell_width_px.value) params.cell_width_px = f.cell_width_px.value;
         return params;
     }
 
@@ -520,8 +522,15 @@
                 ? metric("Mean area", fmt(s.area_um2.mean, 2), `± ${fmt(s.area_um2.std, 2)} µm²`)
                 : metric("Mean area", fmt(s.area_px.mean, 0), `± ${fmt(s.area_px.std, 0)} px²`),
             metric("Mean intensity", fmt(s.mean_intensity.mean, 1), `± ${fmt(s.mean_intensity.std, 1)}`),
-            metric("Threshold", fmt(s.threshold_fraction * 255, 1), "/ 255"),
-            metric("Noise floor", fmt(s.noise_floor_fraction * 255, 1), "/ 255"),
+            ...(s.engine === "learned"
+                ? [
+                    metric("Engine", "Learned", "U-Net"),
+                    metric("Cell width", fmt(s.cell_width_px, 1), "px used"),
+                ]
+                : [
+                    metric("Threshold", fmt(s.threshold_fraction * 255, 1), "/ 255"),
+                    metric("Noise floor", fmt(s.noise_floor_fraction * 255, 1), "/ 255"),
+                ]),
         ].join("");
 
         // Brightness classes: real counts, proportional bars, colour + text label.
@@ -554,6 +563,7 @@
         }
 
         els.cellCount.textContent = d.cells.length.toLocaleString();
+        $('[data-export="figure"]').hidden = !d.figure_image;
         renderHistogram();
         renderTable();
         renderCellDetail();
@@ -846,9 +856,17 @@
         const kind = b.dataset.export;
         if (kind === "csv") download(`${stem()}_cells.csv`, d.csv, "text/csv");
         else if (kind === "json") download(`${stem()}_results.json`, JSON.stringify(d.report, null, 2), "application/json");
-        else {
-            const url = kind === "overlay" ? d.result_image : d.figure_image;
-            download(`${stem()}_${kind}.png`, await (await fetch(url)).blob());
+        else if (kind === "overlay") {
+            // Compose at full resolution from the layers: original + outlines.
+            const c = document.createElement("canvas");
+            c.width = state.width;
+            c.height = state.height;
+            const g = c.getContext("2d");
+            g.drawImage(state.images.original, 0, 0);
+            g.drawImage(state.images.outlines, 0, 0);
+            c.toBlob((blob) => download(`${stem()}_overlay.png`, blob), "image/png");
+        } else {
+            download(`${stem()}_figure.png`, await (await fetch(d.figure_image)).blob());
         }
     }));
 

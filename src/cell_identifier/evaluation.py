@@ -10,6 +10,10 @@ standard detection metrics:
 * recall    = TP / (TP + FN)
 * F1        = harmonic mean of precision and recall
 * mean IoU of matched pairs, and the signed count error (predicted - true).
+
+:func:`average_precision` gives the instance-segmentation score used by the
+Cellpose / Omnipose / StarDist literature, AP = TP / (TP + FP + FN) at a given
+IoU threshold, which penalises both missed and spurious cells.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
-__all__ = ["MatchResult", "match_labels"]
+__all__ = ["MatchResult", "average_precision", "match_labels"]
 
 
 @dataclass(frozen=True)
@@ -93,3 +97,20 @@ def match_labels(
         count_error=n_pred - n_true,
         iou_threshold=iou_threshold,
     )
+
+
+def average_precision(
+    predicted: np.ndarray, truth: np.ndarray, iou_threshold: float = 0.5
+) -> float:
+    """Instance-segmentation average precision, ``TP / (TP + FP + FN)``.
+
+    Two empty label images score 1; one empty and one non-empty score 0.
+    ``iou_threshold`` must be >= 0.5 so that matches are one-to-one.
+    """
+    if predicted.shape != truth.shape:
+        raise ValueError(f"shape mismatch: {predicted.shape} vs {truth.shape}")
+    if not 0.5 <= iou_threshold < 1.0:
+        raise ValueError("iou_threshold must be in [0.5, 1)")
+    m = match_labels(predicted, truth, iou_threshold)
+    total = m.true_positives + m.false_positives + m.false_negatives
+    return 1.0 if total == 0 else m.true_positives / total

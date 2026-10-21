@@ -18,6 +18,7 @@ from . import __version__
 from .classification import BRIGHTNESS_CLASSES, classify_brightness
 from .config import AnalysisConfig
 from .image_io import ImageMetadata, LoadedImage, load_image
+from .learned import segment_learned
 from .measurement import CellMeasurement, measure_cells
 from .preprocessing import extract_channel, preprocess
 from .segmentation import segment
@@ -44,6 +45,8 @@ class AnalysisResult:
         full_scale: Full-scale intensity of the input dtype.
         metadata: Input provenance.
         config: Exact configuration used.
+        engine_info: Which segmentation engine ran and, for the learned engine,
+            the cell width used for rescaling.
         software_version: Package version that produced the result.
         created_at: UTC timestamp (ISO 8601).
     """
@@ -60,6 +63,7 @@ class AnalysisResult:
     full_scale: float
     metadata: ImageMetadata
     config: AnalysisConfig
+    engine_info: dict[str, Any] = field(default_factory=lambda: {"engine": "classical"})
     software_version: str = __version__
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
 
@@ -110,6 +114,7 @@ class AnalysisResult:
             "mean_intensity_corrected": stats([c.mean_intensity_corrected for c in self.cells]),
             "integrated_intensity": stats([c.integrated_intensity for c in self.cells]),
             "brightness_counts": brightness,
+            **self.engine_info,
             "threshold_fraction": round(self.threshold, 6),
             "noise_floor_fraction": round(self.noise_floor, 6),
             "background_level": round(self.background_level, 4),
@@ -151,21 +156,26 @@ def analyze(
     scale = loaded.full_scale
     intensity = extract_channel(loaded.data, config.preprocess.channel)
     pre = preprocess(intensity, scale, config.preprocess)
-    seg = segment(pre.processed, config.segmentation)
+    if config.segmentation.engine == "learned":
+        raw_labels, width = segment_learned(intensity, config.learned)
+        mask = raw_labels > 0
+        threshold = noise_floor = float("nan")  # not applicable: no intensity threshold
+        engine_info: dict[str, Any] = {"engine": "learned", "cell_width_px": round(width, 2)}
+    else:
+        seg = segment(pre.processed, config.segmentation)
+        raw_labels, mask = seg.labels, seg.mask
+        threshold, noise_floor = seg.threshold, seg.noise_floor
+        engine_info = {"engine": "classical"}
     labels, cells, background = measure_cells(
-        seg.labels,
+        raw_labels,
         intensity,
         config.filter,
-        background_mask=~seg.mask,
+        background_mask=~mask,
         pixel_size_um=config.pixel_size_um,
     )
     cells = classify_brightness(cells, config.classification, scale)
     logger.info(
-        "%s: %d cells (threshold %.4f, noise floor %.4f)",
-        loaded.metadata.source,
-        len(cells),
-        seg.threshold,
-        seg.noise_floor,
+        "%s: %d cells (%s engine)", loaded.metadata.source, len(cells), engine_info["engine"]
     )
     return AnalysisResult(
         cells=cells,
@@ -173,11 +183,12 @@ def analyze(
         image=loaded.data,
         intensity=intensity,
         processed=pre.processed,
-        mask=seg.mask,
-        threshold=seg.threshold,
-        noise_floor=seg.noise_floor,
+        mask=mask,
+        threshold=threshold,
+        noise_floor=noise_floor,
         background_level=background,
         full_scale=scale,
         metadata=loaded.metadata,
         config=config,
+        engine_info=engine_info,
     )

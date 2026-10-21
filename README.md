@@ -167,7 +167,7 @@ All settings live in [`src/cell_identifier/config.py`](src/cell_identifier/confi
 | `filter.min_area` / `max_area` | `15` / `5000` px | Set from your cell size; reject debris and clumps. |
 | `filter.exclude_border` | `false` | Use `true` for size and shape statistics (cut-off cells bias them low). |
 | `classification.method` | `absolute` | `quantile` for within-image tertiles; `none` to skip. |
-| `classification.low_cutoff` / `high_cutoff` | 142/255, 156/255 | **Re-calibrate for your microscope and exposure.** The defaults are the tertiles of the bundled sample. |
+| `classification.low_cutoff` / `high_cutoff` | 126/255, 147/255 | **Re-calibrate for your microscope and exposure.** The defaults are the tertiles of the bundled sample. |
 | `pixel_size_um` | unset | Set it to get µm / µm² outputs and densities per mm². |
 
 > **Calibration advice.** Before a study, run `cell-identifier benchmark` with synthetic settings that resemble your images, and inspect `figure.png` for a few real images. Fix one configuration file for the whole experiment and keep it with the data. The JSON reports record it automatically.

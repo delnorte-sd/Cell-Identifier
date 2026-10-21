@@ -65,7 +65,7 @@ This document describes exactly what Cell Identifier computes, so that results c
 
 ## 5. Brightness classes
 
-* **`absolute`** (default): a cell is *Low* if its mean intensity is `< low_cutoff × full scale`, *High* if it is `≥ high_cutoff × full scale`, and *Medium* otherwise. The defaults (142/255 and 156/255) are the tertiles of the bundled E. coli GFP sample under default settings. They are only meaningful for comparable acquisitions and **must be re-calibrated** for each microscope, objective, exposure and strain.
+* **`absolute`** (default): a cell is *Low* if its mean intensity is `< low_cutoff × full scale`, *High* if it is `≥ high_cutoff × full scale`, and *Medium* otherwise. The defaults (126/255 and 147/255) are the tertiles of the bundled E. coli GFP sample under default settings. They are only meaningful for comparable acquisitions and **must be re-calibrated** for each microscope, objective, exposure and strain.
 * **`quantile`:** cut-offs are the 1/3 and 2/3 quantiles of the cells in each image. Classes are relative to the image and cannot be compared across images.
 
 ## 6. Synthetic validation data

@@ -29,5 +29,5 @@ exclude_border = false    # true for unbiased size/shape statistics
 
 [classification]
 method = "absolute"       # absolute | quantile | none
-low_cutoff = 0.5569       # 142/255 - recalibrate for your microscope and exposure!
-high_cutoff = 0.6118      # 156/255
+low_cutoff = 0.4941       # 126/255 - recalibrate for your microscope and exposure!
+high_cutoff = 0.5765      # 147/255

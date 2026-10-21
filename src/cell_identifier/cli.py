@@ -5,6 +5,7 @@ Commands
 analyze    Analyse one or more images or folders and write reports.
 generate   Create synthetic images with ground-truth labels.
 benchmark  Generate synthetic images, analyse them and score the pipeline.
+evaluate   Score the pipeline against your own annotated masks.
 config     Print the default (or effective) configuration as JSON.
 serve      Run the web interface (requires the ``web`` extra).
 
@@ -29,8 +30,8 @@ from .config import (
     apply_overrides,
     load_config_file,
 )
-from .evaluation import match_labels
-from .image_io import SUPPORTED_EXTENSIONS, ImageValidationError, save_image
+from .evaluation import average_precision, match_labels
+from .image_io import SUPPORTED_EXTENSIONS, ImageValidationError, load_image, save_image
 from .pipeline import AnalysisResult, analyze
 from .reporting import write_batch_summary, write_outputs
 from .synthetic import generate
@@ -162,6 +163,63 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _find_mask(image: Path, mask_dir: Path) -> Path | None:
+    """Find the mask for an image: <stem>_masks, <stem>_mask, <stem>_labels or <stem>."""
+    for suffix in ("_masks", "_mask", "_labels", ""):
+        for ext in sorted(SUPPORTED_EXTENSIONS):
+            candidate = mask_dir / f"{image.stem}{suffix}{ext}"
+            if candidate.is_file() and candidate.resolve() != image.resolve():
+                return candidate
+    return None
+
+
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    config = _load_analysis_config(args)
+    images = [
+        p
+        for p in _collect_inputs(args.inputs, args.recursive)
+        if not any(p.stem.endswith(s) for s in ("_masks", "_mask", "_labels"))
+    ]
+    if not images:
+        print("error: no input images found", file=sys.stderr)
+        return EXIT_USAGE
+    rows: list[dict[str, Any]] = []
+    print(f"{'image':32s} {'true':>5} {'found':>5} {'AP50':>6} {'AP75':>6} {'AP90':>6} {'F1':>6}")
+    for path in images:
+        mask_path = _find_mask(path, Path(args.masks) if args.masks else path.parent)
+        if mask_path is None:
+            print(f"SKIPPED {path}: no matching mask", file=sys.stderr)
+            continue
+        truth = load_image(mask_path).data
+        if truth.ndim == 3:
+            truth = truth[..., 0]
+        truth = truth.astype("int64")
+        result = analyze(path, config)
+        if result.labels.shape != truth.shape:
+            print(f"SKIPPED {path}: mask shape {truth.shape} != image", file=sys.stderr)
+            continue
+        m = match_labels(result.labels, truth)
+        aps = [average_precision(result.labels, truth, t) for t in (0.5, 0.75, 0.9)]
+        scores = {"ap50": aps[0], "ap75": aps[1], "ap90": aps[2]}
+        rows.append({"image": str(path), **m.to_dict(), **scores})
+        print(
+            f"{path.name[:32]:32s} {m.true_count:>5} {m.predicted_count:>5} "
+            f"{aps[0]:6.3f} {aps[1]:6.3f} {aps[2]:6.3f} {m.f1:6.3f}"
+        )
+    if not rows:
+        print("error: no image had a matching mask", file=sys.stderr)
+        return EXIT_USAGE
+    means = {k: sum(r[k] for r in rows) / len(rows) for k in ("ap50", "ap75", "ap90", "f1")}
+    print(
+        f"mean over {len(rows)} images: AP50 {means['ap50']:.3f}  AP75 {means['ap75']:.3f}  "
+        f"AP90 {means['ap90']:.3f}  F1 {means['f1']:.3f}"
+    )
+    if args.json:
+        report = json.dumps({"mean": means, "images": rows}, indent=2)
+        Path(args.json).write_text(report + "\n", encoding="utf-8")
+    return EXIT_OK
+
+
 def _cmd_config(args: argparse.Namespace) -> int:
     if args.synthetic:
         config: Any = (
@@ -241,6 +299,19 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_options(p)
     p.add_argument("--json", help="also write per-image metrics to this JSON file")
     p.set_defaults(func=_cmd_benchmark, count=5)
+
+    p = sub.add_parser("evaluate", help="score the pipeline against your own annotated masks")
+    p.add_argument("inputs", nargs="+", help="image files and/or directories")
+    p.add_argument(
+        "-m",
+        "--masks",
+        help="folder of instance masks (default: next to each image); "
+        "matched by name: <stem>_masks.tif, <stem>_mask.png, <stem>.png ...",
+    )
+    p.add_argument("-r", "--recursive", action="store_true", help="search directories recursively")
+    p.add_argument("--json", help="also write per-image scores to this JSON file")
+    _add_config_options(p)
+    p.set_defaults(func=_cmd_evaluate)
 
     p = sub.add_parser("config", help="print the effective configuration as JSON")
     p.add_argument("--synthetic", action="store_true", help="show generator settings instead")

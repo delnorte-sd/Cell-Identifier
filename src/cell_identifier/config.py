@@ -28,6 +28,7 @@ __all__ = [
     "ClassificationConfig",
     "ConfigError",
     "FilterConfig",
+    "LearnedConfig",
     "PreprocessConfig",
     "SegmentationConfig",
     "SyntheticConfig",
@@ -42,6 +43,7 @@ BackgroundMethod = Literal["none", "tophat", "gaussian"]
 NormalizeMethod = Literal["none", "percentile"]
 ThresholdMethod = Literal["otsu", "triangle", "fixed", "adaptive"]
 SplitMethod = Literal["none", "distance", "intensity"]
+Engine = Literal["classical", "learned"]
 ClassificationMethod = Literal["none", "absolute", "quantile"]
 CellShape = Literal["pill", "ellipse"]
 
@@ -119,6 +121,10 @@ class SegmentationConfig:
     """Foreground detection and splitting of touching objects.
 
     Attributes:
+        engine: ``"learned"`` uses the trained U-Net (see :class:`LearnedConfig`),
+            which is far more accurate on real micrographs; ``"classical"`` uses
+            the thresholding and watershed settings below. All other settings in
+            this section apply to the classical engine only.
         threshold_method: ``"otsu"`` and ``"triangle"`` pick a global threshold
             automatically from the histogram (triangle suits sparse, dim cells);
             ``"fixed"`` uses ``fixed_threshold``; ``"adaptive"`` compares each pixel
@@ -153,6 +159,7 @@ class SegmentationConfig:
             uniformly bright cells are cut in pieces; lower it to split more.
     """
 
+    engine: Engine = "learned"
     threshold_method: ThresholdMethod = "otsu"
     fixed_threshold: float = 0.2
     adaptive_block_size: int = 51
@@ -179,6 +186,7 @@ class SegmentationConfig:
         _check(self.min_snr >= 0, "segmentation.min_snr must be >= 0")
         _check(self.opening_radius >= 0, "segmentation.opening_radius must be >= 0")
         _check(self.closing_radius >= 0, "segmentation.closing_radius must be >= 0")
+        _check_choice("segmentation.engine", self.engine, Engine)
         _check_choice("segmentation.split_method", self.split_method, SplitMethod)
         _check(self.watershed_h > 0, "segmentation.watershed_h must be > 0")
         _check(0 < self.intensity_h <= 1, "segmentation.intensity_h must be within (0, 1]")
@@ -219,16 +227,16 @@ class ClassificationConfig:
             cells into tertiles and is only meaningful within one image;
             ``"none"`` skips classification.
         low_cutoff: Mean intensity (fraction of full scale) below which a cell is
-            "Low". The default (142/255) is the lower tertile of cell intensities
+            "Low". The default (126/255) is the lower tertile of cell intensities
             in the bundled E. coli GFP sample analysed with the default settings;
             it must be re-calibrated for other strains, exposures or microscopes.
         high_cutoff: Mean intensity at or above which a cell is "High"; values in
-            between are "Medium". Default 156/255 (upper tertile of the sample).
+            between are "Medium". Default 147/255 (upper tertile of the sample).
     """
 
     method: ClassificationMethod = "absolute"
-    low_cutoff: float = 142 / 255
-    high_cutoff: float = 156 / 255
+    low_cutoff: float = 126 / 255
+    high_cutoff: float = 147 / 255
 
     def __post_init__(self) -> None:
         _check_choice("classification.method", self.method, ClassificationMethod)
@@ -241,12 +249,61 @@ class ClassificationConfig:
 
 
 @dataclass(frozen=True)
+class LearnedConfig:
+    """Settings of the learned (U-Net) segmentation engine.
+
+    Attributes:
+        model: Path to an ONNX model; empty selects the bundled model.
+        cell_width_px: Typical cell width in the image, in pixels. The image is
+            rescaled so cells are about 10 px wide, the scale the model was
+            trained at. ``0`` estimates the width automatically.
+        prob_threshold: Foreground probability above which a pixel is cell. The
+            defaults of this section were tuned on held-out validation images.
+        seed_threshold: Normalised-distance level that defines cell cores used as
+            watershed seeds. Higher splits touching cells less eagerly.
+        min_seed_area: Smallest seed, in pixels of the original image.
+        min_confidence: Objects whose mean foreground probability is below this
+            are discarded (suppresses faint out-of-focus haze).
+        min_snr: Objects whose mean raw intensity is less than this many robust
+            noise standard deviations above the background are discarded. This
+            physical check makes empty or noise-only images yield no cells.
+        tile_size: Images larger than this (after rescaling) are processed in
+            overlapping tiles to bound memory use.
+    """
+
+    model: str = ""
+    cell_width_px: float = 0.0
+    prob_threshold: float = 0.35
+    seed_threshold: float = 0.5
+    min_seed_area: int = 4
+    min_confidence: float = 0.7
+    min_snr: float = 3.0
+    tile_size: int = 512
+
+    def __post_init__(self) -> None:
+        _check(
+            self.cell_width_px == 0 or 2 <= self.cell_width_px <= 200,
+            "learned.cell_width_px must be 0 (auto) or between 2 and 200 px",
+        )
+        _check(0 < self.prob_threshold < 1, "learned.prob_threshold must be in (0, 1)")
+        _check(0 < self.seed_threshold < 1, "learned.seed_threshold must be in (0, 1)")
+        _check(self.min_seed_area >= 1, "learned.min_seed_area must be >= 1")
+        _check(0 <= self.min_confidence < 1, "learned.min_confidence must be in [0, 1)")
+        _check(self.min_snr >= 0, "learned.min_snr must be >= 0")
+        _check(
+            self.tile_size >= 128 and self.tile_size % 16 == 0,
+            "learned.tile_size must be a multiple of 16 and >= 128",
+        )
+
+
+@dataclass(frozen=True)
 class AnalysisConfig:
     """Complete configuration of the analysis pipeline.
 
     Attributes:
         preprocess: Channel selection, denoising and background correction.
-        segmentation: Thresholding, morphology and watershed splitting.
+        segmentation: Engine choice, thresholding, morphology and watershed splitting.
+        learned: Settings of the learned engine.
         filter: Object acceptance rules.
         classification: Brightness classes.
         pixel_size_um: Physical pixel size in micrometres. When set, areas and
@@ -255,6 +312,7 @@ class AnalysisConfig:
 
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
+    learned: LearnedConfig = field(default_factory=LearnedConfig)
     filter: FilterConfig = field(default_factory=FilterConfig)
     classification: ClassificationConfig = field(default_factory=ClassificationConfig)
     pixel_size_um: float | None = None
